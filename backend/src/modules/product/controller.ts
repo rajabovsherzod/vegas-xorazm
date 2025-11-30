@@ -1,0 +1,28 @@
+import { Request, Response } from "express";
+import asyncHandler from "@/utils/asyncHandler";
+import ApiResponse from "@/utils/ApiResponse";
+import { productService } from "./service"; 
+
+// 1. GET ALL
+export const getProducts = asyncHandler(async (req: Request, res: Response) => {
+  const result = await productService.getAll(req.query);
+  res.status(200).json(new ApiResponse(200, result, "Mahsulotlar yuklandi"));
+});
+
+// 2. CREATE
+export const createProduct = asyncHandler(async (req: Request, res: Response) => {
+  const result = await productService.create(req.body);
+  res.status(201).json(new ApiResponse(201, result, "Mahsulot yaratildi"));
+});
+
+// 3. UPDATE (YANGI QO'SHILDI)
+export const updateProduct = asyncHandler(async (req: Request, res: Response) => {
+  const result = await productService.update(Number(req.params.id), req.body);
+  res.status(200).json(new ApiResponse(200, result, "Mahsulot yangilandi"));
+});
+
+// 4. SOFT DELETE
+export const deleteProduct = asyncHandler(async (req: Request, res: Response) => {
+  await productService.delete(Number(req.params.id));
+  res.status(200).json(new ApiResponse(200, null, "Mahsulot o'chirildi"));
+});
