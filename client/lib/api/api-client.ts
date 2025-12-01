@@ -6,6 +6,7 @@ import {
   NotFoundError,
   ServerError,
   ValidationError,
+  ConflictError,
 } from "./errors";
 
 const API_URL = "http://localhost:5000/api/v1"; // .env dan olsa ham bo'ladi
@@ -23,8 +24,30 @@ class ApiClient {
 
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     // 1. Tokenni olish
-    const session = await getSession();
-    const token = session?.user?.accessToken;
+    let token: string | undefined;
+    
+    if (typeof window === 'undefined') {
+       // Server-side: NextAuth'ning getServerSession'idan foydalanish kerak
+       // Lekin bu yerda oddiy getSession() serverda ishlamasligi mumkin yoki context kerak.
+       // Next.js 13+ da server componentlarda headers() yoki cookies() orqali token olish tavsiya qilinadi.
+       // Hozircha, agar serverda bo'lsak, va getSession ishlamasa, biz bu qismni o'tkazib yuborishimiz mumkin,
+       // yoki authOptions ni import qilib getServerSession(authOptions) ishlatishimiz kerak.
+       
+       // FIX: Server componentlardan to'g'ridan-to'g'ri chaqirilganda sessiya muammosi bo'lishi mumkin.
+       // Vaqtincha "Server Error" oldini olish uchun try-catch qo'yamiz.
+       try {
+         const { authOptions } = await import("@/lib/auth"); 
+         const { getServerSession } = await import("next-auth");
+         const session = await getServerSession(authOptions);
+         token = session?.user?.accessToken;
+       } catch (e) {
+         console.log("Serverda session olishda xatolik (ehtimol static generatsiya):", e);
+       }
+    } else {
+       // Client-side
+       const session = await getSession();
+       token = session?.user?.accessToken;
+    }
 
     const { skipContentType, ...fetchOptions } = options;
 
@@ -46,6 +69,7 @@ class ApiClient {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         ...fetchOptions,
         headers,
+        cache: 'no-store' // SSR paytida keshlash muammosini oldini olish uchun
       });
 
       // 4. Xatolarni ushlash
@@ -56,7 +80,14 @@ class ApiClient {
       // 5. Muvaffaqiyatli javob
       // Bizning backend { success: true, data: ..., message: ... } qaytaradi
       const resJson = await response.json();
-      return resJson.data ? resJson.data : resJson; // Data ichidagi narsani qaytaramiz
+      
+      // DEBUG: Backenddan nima kelayotganini ko'rish uchun
+      // console.log(`API Response [${endpoint}]:`, resJson);
+
+      // Agar backend massiv qaytarsa va u data ichida bo'lmasa (ba'zi backendlar to'g'ridan to'g'ri array qaytaradi)
+      if(Array.isArray(resJson)) return resJson as T;
+
+      return resJson.data ? resJson.data : resJson; 
 
     } catch (error) {
       if (error instanceof AppError) {
@@ -85,6 +116,8 @@ class ApiClient {
         throw new AuthorizationError(errorMessage);
       case 404:
         throw new NotFoundError(errorMessage);
+      case 409:
+        throw new ConflictError(errorMessage);
       case 400:
         throw new ValidationError(errorMessage);
       case 500:

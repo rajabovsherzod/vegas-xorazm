@@ -1,6 +1,7 @@
 export enum ErrorCode {
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
   NETWORK_ERROR = 'NETWORK_ERROR',
+  CONFLICT_ERROR = 'CONFLICT_ERROR',
 }
 
 export class AppError extends Error {
@@ -32,6 +33,12 @@ export class AuthorizationError extends AppError {
 export class NotFoundError extends AppError {
   constructor(message = 'Ma\'lumot topilmadi') {
     super(message, 'NOT_FOUND_ERROR', 404);
+  }
+}
+
+export class ConflictError extends AppError {
+  constructor(message = 'Ma\'lumotlar to\'qnashuvi (Duplicate)') {
+    super(message, 'CONFLICT_ERROR', 409);
   }
 }
 

@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from "express";
-import { ZodError, ZodIssue } from "zod";
+import { AnyZodObject, ZodError } from "zod";
 import ApiError from "../utils/ApiError";
 
 export const validate =
-  (schema: any) => // AnyZodObject o'rniga ZodObject<any> ishlatgan edingiz, uni soddaroq qilamiz
+  (schema: AnyZodObject) =>
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await schema.parseAsync({
@@ -11,20 +11,18 @@ export const validate =
         query: req.query,
         params: req.params,
       });
-      next();
+      return next();
     } catch (error) {
+      // Agar bu Zod xatosi bo'lsa
       if (error instanceof ZodError) {
-        
-        // ULTIMATE FIX: error obyekti aniq 'errors' massiviga ega ekanligini tasdiqlaymiz.
-        // ZodError<unknown> muammosini hal qilish uchun 'as any' ishlatildi.
-        const errors = (error as any).errors.map((err: ZodIssue) => ({
-          field: err.path.join("."),
-          message: err.message,
-        }));
-        
-        next(new ApiError(400, "Validatsiya xatosi", errors));
-      } else {
-        next(error);
+        // 🔥 FIX: Xavfsiz mapping
+        const errorMessage = error.errors
+          ? error.errors.map((issue) => issue.message).join(", ")
+          : "Validatsiya xatosi (Aniqlab bo'lmadi)";
+
+        return next(new ApiError(400, errorMessage));
       }
+      // Boshqa xatoliklar
+      return next(error);
     }
   };

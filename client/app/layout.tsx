@@ -3,7 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { Toaster } from "sonner";
-import Providers from "@/providers/query-provider"; // 👈 Yangi Provider
+import Providers from "@/providers/query-provider";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -23,19 +23,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${jakarta.variable} font-sans antialiased`}>
-        {/* 1. Theme Provider */}
+      <body className={`${jakarta.variable} font-sans antialiased h-screen overflow-hidden`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          {/* 2. TanStack Query Provider */}
           <Providers>
             {children}
-            {/* 3. Toast Xabarlari */}
-            <Toaster position="top-center" richColors />
+            <Toaster position="top-right" richColors closeButton />
           </Providers>
         </ThemeProvider>
       </body>

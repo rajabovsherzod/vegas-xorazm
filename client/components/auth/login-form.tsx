@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { User, Lock } from "lucide-react";
 
-// Biz ajratgan schema va tiplar
+// Biz ajratgan schema va tiplar (Bular borligiga ishonch hosil qiling: src/lib/validations/auth.ts)
 import { loginSchema, LoginValues } from "@/lib/validations/auth";
 
 // UI Komponentlar
@@ -42,6 +42,7 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
+      // A) Login qilish
       const result = await signIn("credentials", {
         username: data.username,
         password: data.password,
@@ -52,20 +53,45 @@ export function LoginForm() {
         toast.error("Kirishda xatolik", {
           description: "Login yoki parol noto'g'ri",
         });
-      } else {
-        toast.success("Muvaffaqiyatli!", {
-          description: "Tizimga xush kelibsiz",
-        });
-        router.push("/dashboard");
-        router.refresh();
+        setIsLoading(false);
+        return;
       }
+
+      // B) Rolni aniqlash
+      // Token yangilanishi uchun majburiy refresh beramiz (Cookie o'tirishi uchun)
+      const session = await getSession();
+      const role = session?.user?.role;
+      const name = session?.user?.name;
+
+      toast.success(`Xush kelibsiz, ${name || "Foydalanuvchi"}!`);
+
+      // Router keshini yangilaymiz
+      router.refresh();
+
+      // C) Rolga qarab yo'naltirish (Replace - ortga qaytmaslik uchun)
+      switch (role) {
+        case "owner":
+          router.replace("/owner/dashboard");
+          break;
+        case "admin":
+          router.replace("/admin/orders");
+          break;
+        case "seller":
+          router.replace("/seller/pos");
+          break;
+        default:
+          router.replace("/"); // Agar roli noaniq bo'lsa
+      }
+
     } catch (error) {
+      console.error(error);
       toast.error("Tizim xatoligi", {
         description: "Server bilan aloqa yo'q",
       });
-    } finally {
       setIsLoading(false);
     }
+    // Izoh: Muvaffaqiyatli bo'lsa setIsLoading(false) qilmaymiz, 
+    // sahifa almashguncha spinner aylanib turishi kerak (UX).
   }
 
   return (
@@ -120,6 +146,7 @@ export function LoginForm() {
           )}
         />
 
+        {/* BUTTON */}
         <Button 
           type="submit" 
           className="w-full h-12 text-[15px] rounded-xl shadow-cyan mt-2" 

@@ -10,12 +10,24 @@ import ApiResponse from "@/utils/ApiResponse";
 import logger from "@/utils/logger";
 
 export const login = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const { username, password } = req.body;
+  let { username, password } = req.body;
+  
+  // Kichik harflarga o'tkazish (username unique bo'lishi kerak)
+  if (username) username = username.toLowerCase().trim();
+
+  // DEBUG: Kelayotgan ma'lumotni logga yozish (Parolni yashiramiz)
+  logger.info(`LOGIN URINISHI: username=${username}`);
 
   // 1. Userni qidirish
   const user = await db.query.users.findFirst({
     where: and(eq(users.username, username), eq(users.isDeleted, false)),
   });
+
+  if(user) {
+     logger.info(`USER TOPILDI: id=${user.id}, username=${user.username}, role=${user.role}`);
+  } else {
+     logger.info(`USER TOPILMADI: username=${username}`);
+  }
 
   // 2. Tekshirish
   if (!user || !(await bcrypt.compare(password, user.password))) {

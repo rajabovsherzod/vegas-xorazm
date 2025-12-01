@@ -25,7 +25,7 @@ export const userService = {
     const existingUser = await db.query.users.findFirst({
       where: eq(users.username, payload.username),
     });
-    if (existingUser) throw new ApiError(409, "Bu login band!");
+    if (existingUser) throw new ApiError(409, "Bu xodim tizimda allaqachon mavjud!");
 
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(payload.password, saltRounds);
