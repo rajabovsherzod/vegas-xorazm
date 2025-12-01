@@ -2,22 +2,20 @@ import { db } from "@/db";
 import { products } from "@/db/schema";
 import { eq, desc, ilike, or, sql, SQL, and } from "drizzle-orm";
 import ApiError from "@/utils/ApiError";
-import logger from "@/utils/logger"; // ✅ Logger import qilindi
+import logger from "@/utils/logger";
+import { getIO } from "@/socket"; // 🔌 SOCKET IMPORT
 import { CreateProductInput, UpdateProductInput } from "./validation";
 
 export const productService = {
-  // 1. GET ALL
+  // 1. GET ALL (O'zgarishsiz)
   getAll: async (query: any) => {
     const { search, limit = "20", page = "1", categoryId, showHidden } = query;
     const limitNum = Number(limit);
     const offsetNum = (Number(page) - 1) * limitNum;
 
     const conditions: SQL[] = [];
-
-    // Faqat o'chirilmaganlarni ko'rsatamiz
     conditions.push(eq(products.isDeleted, false));
 
-    // Admin bo'lmasa faqat aktivlarni ko'rsatish
     if (showHidden !== 'true') {
         conditions.push(eq(products.isActive, true));
     }
@@ -51,7 +49,7 @@ export const productService = {
     };
   },
 
-  // 2. CREATE
+  // 2. CREATE (Yangi tovar xabari)
   create: async (payload: CreateProductInput) => {
     if (payload.barcode) {
       const existing = await db.query.products.findFirst({
@@ -60,20 +58,24 @@ export const productService = {
       if (existing) throw new ApiError(400, "Bu shtrix-kod allaqachon mavjud!");
     }
 
-    const newProduct = await db.insert(products).values({
+    const [newProduct] = await db.insert(products).values({
       ...payload,
       price: String(payload.price),
       stock: String(payload.stock),
       categoryId: payload.categoryId ? Number(payload.categoryId) : null,
     }).returning();
 
-    // ✅ LOG: Yaratilganlik haqida axborot
-    logger.info(`Mahsulot yaratildi. ID: ${newProduct[0].id}, Nom: ${newProduct[0].name}, Narx: ${newProduct[0].price}`);
+    logger.info(`Mahsulot yaratildi. ID: ${newProduct.id}, Nom: ${newProduct.name}`);
 
-    return newProduct[0];
+    // 🔥 SOCKET: Yangi tovar qo'shildi
+    try {
+      getIO().emit("new_product", newProduct);
+    } catch (e) { console.error("Socket error:", e); }
+
+    return newProduct;
   },
 
-  // 3. UPDATE
+  // 3. UPDATE (Narx o'zgarishi)
   update: async (id: number, payload: UpdateProductInput) => {
     if (payload.barcode) {
       const existing = await db.query.products.findFirst({
@@ -84,7 +86,7 @@ export const productService = {
       }
     }
 
-    const updatedProduct = await db
+    const [updatedProduct] = await db
       .update(products)
       .set({
         ...payload,
@@ -95,18 +97,21 @@ export const productService = {
       .where(and(eq(products.id, id), eq(products.isDeleted, false)))
       .returning();
 
-    if (!updatedProduct.length) throw new ApiError(404, "Mahsulot topilmadi");
+    if (!updatedProduct) throw new ApiError(404, "Mahsulot topilmadi");
 
-    // ✅ LOG: Nimalar o'zgarganini yozib qo'yamiz
-    const changedFields = Object.keys(payload).join(", ");
-    logger.info(`Mahsulot yangilandi. ID: ${id}, O'zgargan maydonlar: [${changedFields}]`);
+    logger.info(`Mahsulot yangilandi. ID: ${id}`);
 
-    return updatedProduct[0];
+    // 🔥 SOCKET: Narx yoki ma'lumot o'zgardi
+    try {
+      getIO().emit("product_update", updatedProduct);
+    } catch (e) { console.error("Socket error:", e); }
+
+    return updatedProduct;
   },
 
-  // 4. SOFT DELETE
+  // 4. SOFT DELETE (O'chirish xabari)
   delete: async (id: number) => {
-    const deleted = await db
+    const [deleted] = await db
       .update(products)
       .set({ 
         isDeleted: true,
@@ -115,12 +120,15 @@ export const productService = {
       .where(and(eq(products.id, id), eq(products.isDeleted, false)))
       .returning();
 
-    if (!deleted.length) throw new ApiError(404, "Mahsulot topilmadi");
+    if (!deleted) throw new ApiError(404, "Mahsulot topilmadi");
 
-    // ✅ LOG: O'chirish muhim operatsiya, shuning uchun buni qayd etamiz
-    // Agar xohlasangiz logger.warn() ishlatish mumkin, lekin info ham bo'laveradi.
-    logger.info(`Mahsulot o'chirildi (Soft Delete). ID: ${id}, Nom: ${deleted[0].name}`);
+    logger.info(`Mahsulot o'chirildi (Soft Delete). ID: ${id}`);
 
-    return deleted[0];
+    // 🔥 SOCKET: Tovar ro'yxatdan olib tashlandi
+    try {
+      getIO().emit("product_delete", { id });
+    } catch (e) { console.error("Socket error:", e); }
+
+    return deleted;
   },
 };

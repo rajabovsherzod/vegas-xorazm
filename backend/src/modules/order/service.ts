@@ -1,16 +1,15 @@
 import { db } from "@/db";
-// NewOrder ni schema dan import qildik
 import { orders, orderItems, products, NewOrder } from "@/db/schema"; 
 import { eq, inArray, sql } from "drizzle-orm";
 import ApiError from "@/utils/ApiError";
 import logger from "@/utils/logger";
 import { CreateOrderInput, UpdateOrderStatusInput } from "./validation";
+import { getIO } from "@/socket"; // <-- YANGI IMPORT (Socket olish uchun)
 
 export const orderService = {
   // 1. CREATE DRAFT
   create: async (userId: number, payload: CreateOrderInput) => {
     return await db.transaction(async (tx) => {
-      // Kursni raqamga o'giramiz (Frontenddan string keladi)
       const currentRate = parseFloat(payload.exchangeRate || "1");
 
       const productIds = payload.items.map((item) => item.productId);
@@ -22,11 +21,12 @@ export const orderService = {
 
       let totalAmount = 0;
       const itemsToInsert: any[] = [];
+      // Socket uchun o'zgargan mahsulotlarni yig'amiz
+      const changedStocks: { id: number; quantity: number }[] = [];
 
       for (const item of payload.items) {
         const product = dbProducts.find((p) => p.id === item.productId);
         
-        // ... (Mahsulot borligi va Ombor tekshiruvi o'zgarishsiz qoladi) ...
         if (!product || !product.isActive || product.isDeleted) throw new ApiError(400, "Xato mahsulot");
         
         const currentStock = Number(product.stock);
@@ -42,14 +42,13 @@ export const orderService = {
           })
           .where(eq(products.id, product.id));
 
-        // 🔥 NARXNI HISOBLASH (LOGIKA O'ZGARDI)
-        let finalPrice = Number(product.price);
+        // Socket ro'yxatiga qo'shamiz
+        changedStocks.push({ id: product.id, quantity: requestQty });
 
-        // Agar mahsulot USD da bo'lsa, uni So'mga aylantiramiz
+        let finalPrice = Number(product.price);
         if (product.currency === 'USD') {
           finalPrice = finalPrice * currentRate;
         }
-        // Agar UZS bo'lsa, o'z holicha qoladi
 
         const lineTotal = finalPrice * requestQty;
         totalAmount += lineTotal;
@@ -57,8 +56,8 @@ export const orderService = {
         itemsToInsert.push({
           productId: product.id,
           quantity: String(requestQty),
-          price: String(finalPrice), // Chekga SO'MDAGI narx yoziladi
-          originalCurrency: product.currency, // Asl valyutasi saqlanadi (tarix uchun)
+          price: String(finalPrice),
+          originalCurrency: product.currency,
           totalPrice: String(lineTotal),
         });
       }
@@ -67,13 +66,10 @@ export const orderService = {
         sellerId: userId,
         partnerId: payload.partnerId ?? null,
         customerName: payload.customerName || null,
-        
         totalAmount: String(totalAmount),
         finalAmount: String(totalAmount),
-        
-        currency: 'UZS', // Chek har doim so'mda yopiladi (Frontend shuni xohlagan)
-        exchangeRate: String(currentRate), // O'sha paytdagi kursni muhrlaymiz
-        
+        currency: 'UZS', 
+        exchangeRate: String(currentRate),
         status: 'draft',
         type: payload.type as "retail" | "wholesale",
         paymentMethod: payload.paymentMethod as "cash" | "card" | "transfer" | "debt",
@@ -90,12 +86,37 @@ export const orderService = {
         await tx.insert(orderItems).values(itemsWithOrderId);
       }
 
-      logger.info(`Draft yaratildi. ID: ${newOrder.id}, Summa: ${totalAmount} UZS (Kurs: ${currentRate})`);
+      logger.info(`Draft yaratildi. ID: ${newOrder.id}`);
+
+      // 🔥 SOCKET SIGNAL (REAL TIME)
+      try {
+        const io = getIO();
+        
+        // 1. Adminga xabar: "Yangi zakaz tushdi!"
+        io.to("admin_room").emit("new_order", {
+          id: newOrder.id,
+          sellerId: userId,
+          customerName: newOrder.customerName,
+          totalAmount: newOrder.totalAmount,
+          createdAt: newOrder.createdAt
+        });
+
+        // 2. Hamma Sellerlarga: "Ombor yangilandi!"
+        // Frontga qaysi IDlar qanchaga kamayganini yuboramiz
+        io.emit("stock_update", {
+            action: "subtract",
+            items: changedStocks
+        });
+
+      } catch (error) {
+        logger.error("Socket emit error:", error);
+      }
+
       return newOrder;
     });
   },
 
-  // 2. GET ALL
+  // 2. GET ALL (O'zgarishsiz)
   getAll: async () => {
     const data = await db.query.orders.findMany({
       orderBy: (orders, { desc }) => [desc(orders.createdAt)],
@@ -119,14 +140,27 @@ export const orderService = {
       if (!order) throw new ApiError(404, "Buyurtma topilmadi");
       if (order.status !== 'draft') throw new ApiError(400, "Buyurtma allaqachon yopilgan");
 
-      // Cancel bo'lsa omborni qaytarish
+      // Cancel bo'lsa omborni qaytarish (Socket xabari bilan)
       if (payload.status === 'cancelled') {
+        const restoredStocks: { id: number; quantity: number }[] = [];
+
         for (const item of order.items) {
           await tx.execute(
             sql`UPDATE products SET stock = stock + ${item.quantity} WHERE id = ${item.productId}`
           );
+          restoredStocks.push({ id: item.productId, quantity: Number(item.quantity) });
         }
         logger.info(`Order bekor qilindi, mahsulot qaytdi. ID: ${orderId}`);
+
+        // 🔥 SOCKET: Omborni qayta tiklash haqida xabar
+        try {
+            const io = getIO();
+            io.emit("stock_update", {
+                action: "add",
+                items: restoredStocks
+            });
+            io.emit("order_status_change", { id: orderId, status: "cancelled" });
+        } catch (e) { console.error(e); }
       }
 
       const [updatedOrder] = await tx.update(orders)
@@ -137,6 +171,13 @@ export const orderService = {
         })
         .where(eq(orders.id, orderId))
         .returning();
+
+      // 🔥 SOCKET: Agar Completed bo'lsa, shunchaki status o'zgardi deb xabar beramiz
+      if (payload.status === 'completed') {
+          try {
+              getIO().emit("order_status_change", { id: orderId, status: "completed" });
+          } catch (e) { console.error(e); }
+      }
 
       return updatedOrder;
     });

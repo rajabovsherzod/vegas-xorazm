@@ -3,6 +3,9 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
+import { createServer } from "http"; // <-- YANGI
+import { initSocket } from "./socket"; // <-- YANGI
+
 import logger from "./utils/logger";
 import errorHandler from "./middlewares/errorHandler";
 import ApiError from "./utils/ApiError";
@@ -17,26 +20,17 @@ const PORT = process.env.PORT || 5000;
 
 // --- 1. XAVFSIZLIK (MIDDLEWARES) ---
 
-// Helmet: HTTP headerlarini himoyalaydi
 app.use(helmet());
 
-// CORS: Frontendga ruxsat berish
+// Socket ishlashi uchun CORSni biroz yumshatamiz (yoki aniq domen yozing)
 const whitelist = ["http://localhost:3000", "https://vegas-xorazm.uz"];
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // !origin - bu Postman yoki server-to-server zaproslar uchun ruxsat
-      if (!origin || whitelist.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
+    origin: "*", // Socket uchun vaqtincha "*" (keyin whitelistga o'tkazasiz)
     credentials: true,
   })
 );
 
-// Rate Limiter: DDoS himoya (15 minutda 100 ta zapros)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -46,22 +40,18 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// Body Parser: JSON o'qish (limit 16kb - serverni og'irlashtirmaslik uchun)
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 
 // --- 2. ROUTELAR ---
 
-// Test Route
 app.get("/", (req, res) => {
   res.send("Vegas CRM API is running 🚀");
 });
 
-// Asosiy API yo'llari
 app.use("/api/v1", routes);
 
 // --- 3. 404 HANDLER ---
-// Agar mavjud bo'lmagan yo'lga kirilsa
 app.use((req, res, next) => {
   next(new ApiError(404, `Bunday manzil topilmadi: ${req.originalUrl}`));
 });
@@ -69,12 +59,20 @@ app.use((req, res, next) => {
 // --- 4. GLOBAL ERROR HANDLER ---
 app.use(errorHandler);
 
-// --- 5. SERVER START ---
-const server = app.listen(PORT, () => {
-  logger.info(`🚀 Server ${PORT}-portda ishga tushdi (Mode: ${process.env.NODE_ENV})`);
+// --- 5. SERVER START (INTEGRATSIYA) ---
+
+// Expressni HTTP serverga o'raymiz
+const httpServer = createServer(app);
+
+// Socketni ishga tushiramiz
+initSocket(httpServer);
+
+// app.listen EMAS, httpServer.listen!
+const server = httpServer.listen(PORT, () => {
+  logger.info(`🚀 Server (HTTP + Socket) ${PORT}-portda ishga tushdi (Mode: ${process.env.NODE_ENV})`);
 });
 
-// Unhandled Rejection (Baza o'chib qolsa serverni toza o'chirish)
+// Unhandled Rejection
 process.on("unhandledRejection", (err: any) => {
   logger.error("UNHANDLED REJECTION! 💥 Server o‘chirilmoqda...");
   logger.error(err.name, err.message);
