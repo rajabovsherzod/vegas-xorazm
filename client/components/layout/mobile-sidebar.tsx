@@ -15,6 +15,8 @@ import {
   BadgeDollarSign,
   Menu,
   Layers,
+  CheckCircle,
+  Clock
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 
@@ -39,6 +41,8 @@ const iconMap = {
   FileText,
   BadgeDollarSign,
   Layers,
+  CheckCircle,
+  Clock
 };
 
 interface MobileSidebarProps {
@@ -79,6 +83,8 @@ export function MobileSidebar({ navItems }: MobileSidebarProps) {
                  const Icon = iconMap[item.icon as keyof typeof iconMap];
                  const isActive = pathname === item.url;
 
+                 if (!Icon) return null; // Agar icon topilmasa, render qilmaymiz
+
                  return (
                     <Link
                         key={item.url}
@@ -111,4 +117,3 @@ export function MobileSidebar({ navItems }: MobileSidebarProps) {
     </Sheet>
   );
 }
-
