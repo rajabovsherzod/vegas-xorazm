@@ -6,12 +6,14 @@ import {
   Settings,
   Store,
   FileText,
-  BadgeDollarSign
+  BadgeDollarSign,
+  Layers,
+  CheckCircle,
+  Clock
 } from "lucide-react";
 
 import { NavItem } from "@/components/layout/app-sidebar";
 
-// 🔥 MUHIM: title o'rniga text bo'lishi kerak edi
 export const ownerNav: NavItem[] = [
   { text: "Dashboard", url: "/owner/dashboard", icon: "LayoutDashboard" },
   { text: "Xodimlar", url: "/owner/staff", icon: "Users" },
@@ -21,12 +23,14 @@ export const ownerNav: NavItem[] = [
 ];
 
 export const adminNav: NavItem[] = [
-  { text: "Kassa", url: "/admin/orders", icon: "ShoppingCart" },
+  { text: "Dashboard", url: "/admin/dashboard", icon: "LayoutDashboard" },
+  { text: "Buyurtmalar", url: "/admin/orders", icon: "Clock" },
   { text: "Mahsulotlar", url: "/admin/products", icon: "Package" },
+  { text: "Kategoriyalar", url: "/admin/categories", icon: "Layers" },
   { text: "Hisobotlar", url: "/admin/reports", icon: "FileText" },
 ];
 
 export const sellerNav: NavItem[] = [
-  { text: "Savdo oynasi (POS)", url: "/seller/pos", icon: "Store" },
-  { text: "Mening savdolarim", url: "/seller/history", icon: "FileText" },
+  { text: "Kassa", url: "/seller/pos", icon: "Store" },
+  { text: "Yakunlanganlar", url: "/seller/completed", icon: "CheckCircle" },
 ];

@@ -82,12 +82,14 @@ class ApiClient {
       const resJson = await response.json();
       
       // DEBUG: Backenddan nima kelayotganini ko'rish uchun
-      // console.log(`API Response [${endpoint}]:`, resJson);
+      console.log(`API Response [${endpoint}]:`, resJson);
 
       // Agar backend massiv qaytarsa va u data ichida bo'lmasa (ba'zi backendlar to'g'ridan to'g'ri array qaytaradi)
       if(Array.isArray(resJson)) return resJson as T;
 
-      return resJson.data ? resJson.data : resJson; 
+      // Backend { success, data, message } formatida qaytaradi
+      // data ni qaytaramiz
+      return resJson.data !== undefined ? resJson.data : resJson; 
 
     } catch (error) {
       if (error instanceof AppError) {

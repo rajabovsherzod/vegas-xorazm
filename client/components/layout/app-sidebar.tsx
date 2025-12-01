@@ -14,8 +14,11 @@ import {
   ChevronLeft,
   Store,
   FileText,
-  BadgeDollarSign
-} from "lucide-react"; // Barcha kerakli ikonkalarni import qilamiz
+  BadgeDollarSign,
+  Layers,
+  CheckCircle,
+  Clock
+} from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { setSidebarCookie } from "@/lib/sidebar-cookie";
@@ -31,6 +34,9 @@ const iconMap = {
   Store: Store,
   FileText: FileText,
   BadgeDollarSign: BadgeDollarSign,
+  Layers: Layers,
+  CheckCircle: CheckCircle,
+  Clock: Clock,
 };
 
 // Navigatsiya elementi tipi

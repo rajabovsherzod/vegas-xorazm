@@ -1,15 +1,26 @@
 import { db } from "@/db";
 import { categories } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, ilike, or, SQL } from "drizzle-orm";
 import ApiError from "@/utils/ApiError";
 // Importni to'g'riladik, endi u validation.ts faylidan keladi!
 import { CreateCategoryInput, UpdateCategoryInput } from "./validation"; 
 
 // Category uchun Service mantiqi
 export const categoryService = {
-  // ... (Qolgan getAll logikasi o'zgarishsiz)
-  getAll: async () => {
-    const data = await db.select().from(categories).orderBy(desc(categories.id));
+  // 1. GET ALL
+  getAll: async (query: any) => {
+    const { search } = query;
+    
+    const conditions: SQL[] = [];
+    if (search) {
+        conditions.push(ilike(categories.name, `%${search}%`));
+    }
+
+    const data = await db.query.categories.findMany({
+        where: (table, { and }) => and(...conditions),
+        orderBy: desc(categories.id),
+    });
+    
     return data;
   },
 

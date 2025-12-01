@@ -14,6 +14,7 @@ import {
   FileText,
   BadgeDollarSign,
   Menu,
+  Layers,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 
@@ -37,6 +38,7 @@ const iconMap = {
   Store,
   FileText,
   BadgeDollarSign,
+  Layers,
 };
 
 interface MobileSidebarProps {

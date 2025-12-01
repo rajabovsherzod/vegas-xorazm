@@ -5,7 +5,7 @@ import ApiResponse from "@/utils/ApiResponse";
 
 // 1. GET ALL
 export const getCategories = asyncHandler(async (req: Request, res: Response) => {
-  const result = await categoryService.getAll();
+  const result = await categoryService.getAll(req.query);
   res.status(200).json(new ApiResponse(200, result, "Kategoriyalar yuklandi"));
 });
 

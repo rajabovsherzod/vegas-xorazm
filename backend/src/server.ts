@@ -32,11 +32,15 @@ app.use(
 );
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: "Juda ko‘p so‘rov yuborildi, 15 daqiqadan keyin urinib ko‘ring.",
+  windowMs: 1 * 60 * 1000, // 1 daqiqa
+  max: 200, // 1 daqiqada 200 ta so'rov (har bir foydalanuvchi uchun)
+  message: "Juda ko'p so'rov yuborildi, bir daqiqadan keyin urinib ko'ring.",
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Socket.io ulanishlarini o'tkazib yuborish
+    return req.path.includes('/socket.io');
+  }
 });
 app.use("/api", limiter);
 

@@ -3,10 +3,9 @@ import { cookies } from "next/headers";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUsdRate } from "@/lib/api/currency";
-import { adminNav } from "@/config/nav"; // 👈 Admin Menyu
+import { adminNav } from "@/config/nav"; 
 
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/layout/app-sidebar";
+import { AppSidebar } from "@/components/layout/app-sidebar"; 
 import { Header } from "@/components/layout/header";
 
 export default async function AdminLayout({
@@ -19,7 +18,7 @@ export default async function AdminLayout({
     getUsdRate()
   ]);
 
-  // 🚨 XAVFSIZLIK: Faqat Admin (va xohlasangiz Owner)
+  // Owner ham kirishi mumkin, Admin ham
   if (!session || (session.user.role !== 'admin' && session.user.role !== 'owner')) {
     redirect("/login");
   }
@@ -28,17 +27,29 @@ export default async function AdminLayout({
   const defaultOpen = cookieStore.get("sidebar:state")?.value === "true";
 
   return (
-    <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar navItems={adminNav} /> {/* Admin Menyusi */}
+    <div className="flex h-screen overflow-hidden bg-[#F4F6F8] dark:bg-[#0D1B1E]">
+      {/* Desktop Sidebar */}
+      <AppSidebar 
+        navItems={adminNav} 
+        defaultOpen={defaultOpen} 
+        className="hidden md:flex border-r border-gray-200 dark:border-white/10"
+      />
 
-      <SidebarInset className="bg-[#F4F6F8] dark:bg-[#0D1B1E] flex flex-col h-screen overflow-hidden">
-        <Header user={session.user} rate={usdRate} />
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 scroll-smooth">
-          <div className="w-full max-w-7xl mx-auto">
-            {children}
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden transition-all duration-300">
+        
+        {/* Header */}
+        <Header user={session.user} rate={usdRate} navItems={adminNav} />
+        
+        <main className="flex-1 overflow-y-auto">
+          <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 space-y-6">
+            <div>
+              {children}
+            </div>
           </div>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+        </main>
+
+      </div>
+    </div>
   )
 }
