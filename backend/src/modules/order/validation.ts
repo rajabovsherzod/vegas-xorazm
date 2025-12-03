@@ -5,8 +5,8 @@ import { orderTypeEnum, paymentMethodEnum } from "../../db/schema";
 const orderItemSchema = z.object({
   // 🛠️ TUZATILDI: Ichidagi { invalid_type_error: ... } ni olib tashladik.
   // Shunchaki z.number() ni o'zi "Required" va "Number bo'lishi shart" degan ma'noni bildiradi.
-  productId: z.number(), 
-  
+  productId: z.number(),
+
   quantity: z.string().regex(/^\d+(\.\d{1,2})?$/, "Miqdor to'g'ri bo'lishi kerak (masalan: '2' yoki '1.5')"),
 });
 
@@ -15,10 +15,10 @@ export const createOrderSchema = z.object({
   body: z.object({
     partnerId: z.number().optional(),
     customerName: z.string().optional(),
-    
+
     type: z.enum(orderTypeEnum.enumValues as [string, ...string[]]).default('retail'),
     paymentMethod: z.enum(paymentMethodEnum.enumValues as [string, ...string[]]).default('cash'),
-    
+
     // --- YANGI: Kursni qabul qilamiz ---
     // Default 1 berib turamiz, agar frontend yubormasa (eski mantiq buzilmasligi uchun)
     exchangeRate: z.string().regex(/^\d+(\.\d{1,2})?$/, "Kurs raqam bo'lishi kerak").default("1"),
@@ -34,5 +34,17 @@ export const updateOrderStatusSchema = z.object({
   }),
 });
 
+// 4. Update Order (Tahrir qilish)
+export const updateOrderSchema = z.object({
+  body: z.object({
+    items: z.array(orderItemSchema).min(1, "Kamida bitta mahsulot tanlanishi kerak"),
+    customerName: z.string().optional(),
+    paymentMethod: z.enum(paymentMethodEnum.enumValues as [string, ...string[]]).optional(),
+    exchangeRate: z.string().regex(/^\d+(\.\d{1,2})?$/, "Kurs raqam bo'lishi kerak").optional(),
+    type: z.enum(orderTypeEnum.enumValues as [string, ...string[]]).optional(),
+  }),
+});
+
 export type CreateOrderInput = z.infer<typeof createOrderSchema>["body"];
 export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>["body"];
+export type UpdateOrderInput = z.infer<typeof updateOrderSchema>["body"];

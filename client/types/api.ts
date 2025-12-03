@@ -147,7 +147,7 @@ export interface UpdateOrderStatusPayload {
 // USER TYPES
 // ============================================================================
 
-export type UserRole = 'owner' | 'admin' | 'seller';
+export type UserRole = 'owner' | 'admin' | 'cashier' | 'seller' | 'developer';
 
 export interface User {
   id: number;

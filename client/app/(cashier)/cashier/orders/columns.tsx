@@ -24,6 +24,7 @@ import {
   Banknote,
   Building2,
   Receipt,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -37,11 +38,12 @@ const paymentMethodMap: Record<string, { label: string; icon: any }> = {
 interface ColumnsProps {
   onView: (order: Order) => void;
   onPrint: (order: Order) => void;
+  onEdit: (order: Order) => void;
   onConfirm: (order: Order) => void;
   onCancel: (order: Order) => void;
 }
 
-export const getColumns = ({ onView, onPrint, onConfirm, onCancel }: ColumnsProps): ColumnDef<Order>[] => [
+export const getColumns = ({ onView, onPrint, onEdit, onConfirm, onCancel }: ColumnsProps): ColumnDef<Order>[] => [
   {
     accessorKey: "id",
     header: "ID",
@@ -160,15 +162,23 @@ export const getColumns = ({ onView, onPrint, onConfirm, onCancel }: ColumnsProp
               <DropdownMenuContent align="end" className="w-[160px] bg-white dark:bg-[#1C2C30] border border-gray-200 dark:border-white/10">
                 <DropdownMenuLabel>Amallar</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={() => onConfirm(order)} 
+                <DropdownMenuItem
+                  onClick={() => onEdit(order)}
+                  className="text-[#00B8D9] focus:text-[#00B8D9] focus:bg-[#00B8D9]/10 cursor-pointer"
+                >
+                  <Pencil className="w-4 h-4 mr-2" />
+                  Tahrir qilish
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => onConfirm(order)}
                   className="text-emerald-600 focus:text-emerald-600 focus:bg-emerald-50 dark:focus:bg-emerald-900/20 cursor-pointer"
                 >
                   <Check className="w-4 h-4 mr-2" />
                   Tasdiqlash
                 </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => onCancel(order)} 
+                <DropdownMenuItem
+                  onClick={() => onCancel(order)}
                   className="text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-900/20 cursor-pointer"
                 >
                   <XCircle className="w-4 h-4 mr-2" />

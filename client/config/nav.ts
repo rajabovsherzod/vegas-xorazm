@@ -23,14 +23,14 @@ export const ownerNav: NavItem[] = [
   { text: "Xodimlar", url: "/owner/staff", icon: "Users" },
 ];
 
-export const adminNav: NavItem[] = [
-  { text: "Dashboard", url: "/admin/dashboard", icon: "LayoutDashboard" },
-  { text: "Buyurtmalar", url: "/admin/orders", icon: "Clock" },
-  { text: "Mahsulotlar", url: "/admin/products", icon: "Package" },
-  { text: "Kategoriyalar", url: "/admin/categories", icon: "Layers" },
-  { text: "Kirimlar tarixi", url: "/admin/stock-history", icon: "FileText" },
-  { text: "QR Kod", url: "/admin/qr-code", icon: "QrCode" },
-  { text: "Scanner Test", url: "/admin/qr-scanner-test", icon: "ScanLine" },
+export const cashierNav: NavItem[] = [
+  { text: "Dashboard", url: "/cashier/dashboard", icon: "LayoutDashboard" },
+  { text: "Buyurtmalar", url: "/cashier/orders", icon: "Clock" },
+  { text: "Mahsulotlar", url: "/cashier/products", icon: "Package" },
+  { text: "Kategoriyalar", url: "/cashier/categories", icon: "Layers" },
+  { text: "Kirimlar tarixi", url: "/cashier/stock-history", icon: "FileText" },
+  { text: "QR Kod", url: "/cashier/qr-code", icon: "QrCode" },
+  { text: "Scanner Test", url: "/cashier/qr-scanner-test", icon: "ScanLine" },
 ];
 
 export const superAdminNav: NavItem[] = [

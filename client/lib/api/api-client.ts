@@ -82,13 +82,25 @@ class ApiClient {
 
       // DEBUG: Backenddan nima kelayotganini ko'rish uchun
       console.log(`API Response [${endpoint}]:`, resJson);
+      console.log(`  - Has 'data' key:`, 'data' in resJson);
+      console.log(`  - Type of data:`, typeof resJson.data);
+      console.log(`  - Is data array:`, Array.isArray(resJson.data));
 
       // Agar backend massiv qaytarsa va u data ichida bo'lmasa (ba'zi backendlar to'g'ridan to'g'ri array qaytaradi)
-      if (Array.isArray(resJson)) return resJson as T;
+      if (Array.isArray(resJson)) {
+        console.log(`  - Returning array directly, length:`, resJson.length);
+        return resJson as T;
+      }
 
       // Backend { success, data, message } formatida qaytaradi
       // data ni qaytaramiz
-      return resJson.data !== undefined ? resJson.data : resJson;
+      if (resJson.data !== undefined) {
+        console.log(`  - Returning resJson.data`);
+        return resJson.data as T;
+      } else {
+        console.log(`  - Returning resJson (no data key)`);
+        return resJson as T;
+      }
 
     } catch (error) {
       if (error instanceof AppError) {

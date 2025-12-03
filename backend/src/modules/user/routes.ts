@@ -10,7 +10,7 @@ const router = Router();
 router.use(protect); 
 
 router.route("/")
-  .get(authorize('owner', 'admin'), getUsers) // Faqat Owner va Admin ko'ra olsin
+  .get(authorize('owner', 'cashier'), getUsers) // Faqat Owner va Kassir ko'ra olsin
   .post(authorize('owner'), validate(createUserSchema), createUser); 
 
 router.route("/:id")

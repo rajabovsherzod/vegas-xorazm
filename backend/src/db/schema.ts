@@ -5,7 +5,7 @@ import { relations } from 'drizzle-orm';
 export const currencyEnum = pgEnum('currency', ['UZS', 'USD']);
 export const orderTypeEnum = pgEnum('order_type', ['retail', 'wholesale']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'card', 'transfer', 'debt']);
-export const roleEnum = pgEnum('role', ['owner', 'admin', 'seller', 'developer']);
+export const roleEnum = pgEnum('role', ['owner', 'admin', 'cashier', 'seller', 'developer']);
 export const orderStatusEnum = pgEnum('order_status', ['draft', 'completed', 'cancelled', 'refunded']);
 
 // ---------------------------

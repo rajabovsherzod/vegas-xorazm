@@ -21,6 +21,13 @@ export const getOrders = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json(new ApiResponse(200, result, "Buyurtmalar tarixi"));
 });
 
+// 2.5. GET ORDER BY ID (Tahrir uchun)
+export const getOrderById = asyncHandler(async (req: Request, res: Response) => {
+  const orderId = Number(req.params.id);
+  const result = await orderService.getById(orderId);
+  res.status(200).json(new ApiResponse(200, result, "Buyurtma ma'lumotlari"));
+});
+
 // 3. UPDATE STATUS (Confirm/Reject - Admin qiladi)
 export const updateOrderStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
   const orderId = Number(req.params.id);
@@ -31,7 +38,17 @@ export const updateOrderStatus = asyncHandler(async (req: AuthRequest, res: Resp
   res.status(200).json(new ApiResponse(200, result, `Buyurtma holati o'zgartirildi: ${req.body.status}`));
 });
 
-// 4. MARK AS PRINTED
+// 4. UPDATE ORDER (Tahrir qilish)
+export const updateOrder = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const orderId = Number(req.params.id);
+  const userId = req.user.id;
+  const userRole = req.user.role;
+
+  const result = await orderService.update(orderId, userId, userRole, req.body);
+  res.status(200).json(new ApiResponse(200, result, "Buyurtma tahrir qilindi"));
+});
+
+// 5. MARK AS PRINTED
 export const markAsPrinted = asyncHandler(async (req: Request, res: Response) => {
   const orderId = Number(req.params.id);
   const result = await orderService.markAsPrinted(orderId);

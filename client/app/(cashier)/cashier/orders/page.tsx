@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { orderService, Order } from "@/lib/services/order.service";
+import { useSocket } from "@/hooks/use-socket";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -30,7 +32,9 @@ import { TableSkeleton } from "@/components/ui/table-skeleton";
 type TabType = "pending" | "unprinted" | "printed";
 
 export default function AdminOrdersPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
+  const socket = useSocket();
   const [activeTab, setActiveTab] = useState<TabType>("pending");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -44,6 +48,47 @@ export default function AdminOrdersPage() {
     queryKey: ["orders"],
     queryFn: () => orderService.getAll(),
   });
+
+  // Real-time Socket.IO listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    // Admin xonasiga qo'shilish
+    socket.emit("join_admin");
+
+    // Yangi order kelganda
+    socket.on("new_order", (data) => {
+      console.log("🔔 Yangi buyurtma:", data);
+      toast.success(`Yangi buyurtma #${data.id} qabul qilindi!`);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    });
+
+    // Order tahrir qilinganda
+    socket.on("order_updated", (data) => {
+      console.log("✏️ Buyurtma tahrir qilindi:", data);
+      toast.info(`Buyurtma #${data.id} tahrir qilindi`);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    });
+
+    // Order status o'zgarganda
+    socket.on("order_status_change", (data) => {
+      console.log("🔄 Order status o'zgardi:", data);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    });
+
+    // Stock yangilanganda
+    socket.on("stock_update", (data) => {
+      console.log("📦 Ombor yangilandi:", data);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    });
+
+    return () => {
+      socket.off("new_order");
+      socket.off("order_updated");
+      socket.off("order_status_change");
+      socket.off("stock_update");
+    };
+  }, [socket, queryClient]);
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ orderId, status, orderData }: { orderId: number; status: "completed" | "cancelled"; orderData?: Order }) =>
@@ -101,6 +146,11 @@ export default function AdminOrdersPage() {
     setReceiptOrder(order);
   };
 
+  const handleEdit = (order: Order) => {
+    // Edit sahifasiga o'tkazish (order ID bilan)
+    router.push(`/cashier/orders/edit/${order.id}`);
+  };
+
   const handleConfirm = (order: Order) => {
     setConfirmOrder(order);
   };
@@ -113,6 +163,7 @@ export default function AdminOrdersPage() {
   const columns = useMemo(() => getColumns({
     onView: handleViewDetails,
     onPrint: handlePrint,
+    onEdit: handleEdit,
     onConfirm: handleConfirm,
     onCancel: handleCancel,
   }), []);

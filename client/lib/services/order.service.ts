@@ -35,6 +35,20 @@ export const orderService = {
   },
 
   /**
+   * Bitta buyurtmani olish (ID bo'yicha)
+   */
+  getById: async (orderId: number): Promise<Order> => {
+    return await api.get<Order>(`/orders/${orderId}`);
+  },
+
+  /**
+   * Buyurtmani tahrir qilish (faqat draft status)
+   */
+  update: async (orderId: number, payload: CreateOrderPayload): Promise<Order> => {
+    return await api.patch<Order>(`/orders/${orderId}`, payload);
+  },
+
+  /**
    * Buyurtma cheki chiqarilganligini belgilash
    */
   markAsPrinted: async (orderId: number): Promise<Order> => {
