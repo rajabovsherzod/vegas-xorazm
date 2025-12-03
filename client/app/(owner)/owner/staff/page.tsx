@@ -1,17 +1,12 @@
 import { Suspense } from "react";
-import { 
-  Search, 
-  User
-} from "lucide-react";
+import { User } from "lucide-react";
 import { userService } from "@/lib/services/user.service"; 
 import { AddUserDialog } from "@/components/users/add-user-dialog";
 import { StaffCard } from "@/components/users/staff-card";
-
-// UI Components
-import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/layout/page-header";
 
 // ----------------------------------------------------------------------
-// 2. MAIN PAGE COMPONENT (SSR)
+// MAIN PAGE COMPONENT (SSR)
 // ----------------------------------------------------------------------
 export default async function UsersPage() {
   // SSR Data Fetching
@@ -26,27 +21,16 @@ export default async function UsersPage() {
   }
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="space-y-6">
       
-      {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b border-gray-200 dark:border-white/10 pb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-[#111827] dark:text-white">
-            Xodimlar
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative hidden md:block group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#00B8D9] transition-colors" />
-            <Input 
-              placeholder="Ism yoki ID bo'yicha qidirish..." 
-              className="pl-10 w-[280px] bg-white dark:bg-[#132326] border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-[#00B8D9]/10 focus:border-[#00B8D9] rounded-xl h-11 transition-all font-medium"
-            />
-          </div>
-          <AddUserDialog />
-        </div>
-      </div>
+      {/* PAGE HEADER */}
+      <PageHeader
+        title="Xodimlar"
+        description="Barcha xodimlar va ularning faoliyati"
+        searchPlaceholder="Ism yoki ID bo'yicha qidirish..."
+      >
+        <AddUserDialog />
+      </PageHeader>
 
       {/* CONTENT SECTION */}
       <Suspense fallback={<UsersSkeleton />}>

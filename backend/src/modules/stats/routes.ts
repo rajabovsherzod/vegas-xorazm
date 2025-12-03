@@ -1,11 +1,15 @@
 import { Router } from "express";
-import { getDashboardStats } from "./controller";
+import { getDashboardStats, getOwnerStats } from "./controller";
 import { protect, authorize } from "@/middlewares/auth";
 
 const router = Router();
 
-// Faqat Admin va Owner ko'ra oladi
-router.get("/dashboard", protect, authorize("admin", "owner"), getDashboardStats);
+// Admin uchun dashboard stats
+router.get("/dashboard", protect, authorize("admin"), getDashboardStats);
+
+// Owner uchun business analytics
+router.get("/owner", protect, authorize("owner"), getOwnerStats);
 
 export default router;
+
 

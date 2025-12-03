@@ -7,16 +7,16 @@ export async function middleware(req: NextRequest) {
 
   // 1. Tokenni olish (Secret .env faylda bo'lishi shart)
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  
+
   // ----------------------------------------------------------------------
   // A. USER LOGIN QILMAGAN BO'LSA (MEHMON)
   // ----------------------------------------------------------------------
   if (!token) {
-    const protectedPaths = ["/owner", "/admin", "/seller", "/dashboard"];
-    
+    const protectedPaths = ["/owner", "/admin", "/seller", "/superadmin", "/dashboard"];
+
     // Agar himoyalangan yo'lga kirmoqchi bo'lsa -> Login sahifasiga
     if (protectedPaths.some((path) => pathname.startsWith(path))) {
-      return NextResponse.redirect(new URL("/login", req.url));
+      return NextResponse.redirect(new URL("/auth/login", req.url));
     }
     // Boshqa holatlarda (masalan, home page yoki login) indamaymiz
     return NextResponse.next();
@@ -28,14 +28,17 @@ export async function middleware(req: NextRequest) {
   const role = token.role as string;
 
   // Har bir rol uchun TO'G'RI BO'LGAN "Home" manzilini aniqlaymiz
-  let correctDashboard = "/login"; 
-  
+  let correctDashboard = "/login";
+
   switch (role) {
     case "owner":
       correctDashboard = "/owner/dashboard";
       break;
     case "admin":
       correctDashboard = "/admin/orders"; // Admin uchun asosiy joy
+      break;
+    case "developer":
+      correctDashboard = "/superadmin/error-logs"; // Developer uchun asosiy joy
       break;
     case "seller":
       correctDashboard = "/seller/pos";   // Seller uchun asosiy joy
@@ -45,7 +48,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // 1-SENARIY: Login sahifasida yoki Bosh sahifada bo'lsa -> Dashboardga otamiz
-  if (pathname === "/login" || pathname === "/") {
+  if (pathname === "/auth/login" || pathname === "/login" || pathname === "/") {
     return NextResponse.redirect(new URL(correctDashboard, req.url));
   }
 
@@ -56,15 +59,20 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith("/owner") && role !== "owner") {
     return NextResponse.redirect(new URL(correctDashboard, req.url));
   }
-  
+
   if (pathname.startsWith("/admin") && role !== "admin") {
     // 🔥 DIQQAT: Owner admin panelga kira olmasligi uchun shu yerda role !== 'admin' qoldiramiz.
     // Agar Owner adminni ham ko'rsin desangiz: (role !== "admin" && role !== "owner") qilinadi.
     // Lekin siz "boshqasiga o'tmasin" dedingiz, shuning uchun qat'iy yopamiz.
     return NextResponse.redirect(new URL(correctDashboard, req.url));
   }
-  
+
   if (pathname.startsWith("/seller") && role !== "seller") {
+    return NextResponse.redirect(new URL(correctDashboard, req.url));
+  }
+
+  // SuperAdmin - faqat admin va developer
+  if (pathname.startsWith("/superadmin") && role !== "admin" && role !== "developer") {
     return NextResponse.redirect(new URL(correctDashboard, req.url));
   }
 
@@ -77,9 +85,12 @@ export const config = {
   matcher: [
     "/",
     "/login",
+    "/auth/login",
     "/owner/:path*",
     "/admin/:path*",
     "/seller/:path*",
-    "/dashboard/:path*"
+    "/superadmin/:path*",
+    "/dashboard/:path*",
+    "/unauthorized"
   ],
 };

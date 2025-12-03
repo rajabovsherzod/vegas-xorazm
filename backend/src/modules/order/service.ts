@@ -181,5 +181,20 @@ export const orderService = {
 
       return updatedOrder;
     });
+  },
+
+  // 4. MARK AS PRINTED
+  markAsPrinted: async (id: number) => {
+    const [updatedOrder] = await db
+      .update(orders)
+      .set({ isPrinted: true })
+      .where(eq(orders.id, id))
+      .returning();
+    
+    if (!updatedOrder) {
+      throw new ApiError(404, "Buyurtma topilmadi");
+    }
+    
+    return updatedOrder;
   }
 };

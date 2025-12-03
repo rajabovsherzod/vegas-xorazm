@@ -21,6 +21,21 @@ export const initSocket = (httpServer: HttpServer) => {
       logger.info(`Socket ${socket.id} admin xonasiga qo'shildi`);
     });
 
+    // QR Scan event (Test rejimi)
+    socket.on("qr-scan", (data) => {
+      logger.info(`📱 QR Scan qilindi: ${data.qrData}`);
+      // Barcha ulangan clientlarga broadcast qilish
+      io.emit("qr-scan-broadcast", data);
+    });
+
+    // QR Scan result (Telefon scan qilganda)
+    socket.on("qr-scan-result", (data) => {
+      logger.info(`📱 QR Scan result keldi:`, data);
+      // Barcha ulangan clientlarga broadcast qilish
+      io.emit("qr-scan-result", data);
+      logger.info(`✅ Broadcast yuborildi: qr-scan-result`);
+    });
+
     socket.on("disconnect", () => {
       // logger.info(`❌ Ulanish uzildi: ${socket.id}`);
     });

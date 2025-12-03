@@ -1,34 +1,27 @@
 import { api } from "@/lib/api/api-client";
-export interface Product {
-  id: number;
-  name: string;
-  barcode: string | null;
-  categoryId: number | null;
-  price: number;
-  originalPrice: number | null;
-  currency: 'UZS' | 'USD';
-  stock: number;
-  unit: string;
-  image: string | null;
-  isActive: boolean;
+import type { Product, CreateProductPayload, UpdateProductPayload, PaginatedResponse } from "@/types/api";
+
+interface GetProductsParams {
+  search?: string;
+  categoryId?: string | number;
+  page?: number;
+  limit?: number;
+  showHidden?: string;
 }
 
-export interface CreateProductData {
-  name: string;
-  barcode?: string;
-  categoryId?: number;
-  price: number;
-  originalPrice?: number;
-  currency: 'UZS' | 'USD';
-  stock: number;
-  unit: string;
-}
-
+/**
+ * Product Service
+ * 
+ * Mahsulotlar bilan ishlash uchun API metodlari
+ */
 export const productService = {
-  getAll: async (query?: Record<string, any>) => {
+  /**
+   * Barcha mahsulotlarni olish
+   */
+  getAll: async (params?: GetProductsParams): Promise<PaginatedResponse<Product>> => {
     const searchParams = new URLSearchParams();
-    if (query) {
-      Object.entries(query).forEach(([key, value]) => {
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== "") {
           searchParams.append(key, String(value));
         }
@@ -36,17 +29,36 @@ export const productService = {
     }
     const queryString = searchParams.toString();
     const endpoint = queryString ? `/products?${queryString}` : "/products";
-    
-    return await api.get(endpoint);
+
+    return await api.get<PaginatedResponse<Product>>(endpoint);
   },
-  create: async (data: CreateProductData) => {
-    return await api.post("/products", data);
+
+  /**
+   * Yangi mahsulot yaratish
+   */
+  create: async (data: CreateProductPayload): Promise<Product> => {
+    return await api.post<Product>("/products", data);
   },
-  update: async (id: number, data: Partial<CreateProductData>) => {
-    return await api.patch(`/products/${id}`, data);
+
+  /**
+   * Mahsulotni yangilash
+   */
+  update: async (id: number, data: UpdateProductPayload): Promise<Product> => {
+    return await api.patch<Product>(`/products/${id}`, data);
   },
-  delete: async (id: number) => {
-    return await api.delete(`/products/${id}`);
+
+  /**
+   * Mahsulot kirim qilish (add stock)
+   */
+  addStock: async (id: number, quantity: number, newPrice?: number): Promise<Product> => {
+    return await api.post<Product>(`/products/${id}/stock`, { quantity, newPrice });
+  },
+
+  /**
+   * Mahsulotni o'chirish (soft delete)
+   */
+  delete: async (id: number): Promise<void> => {
+    return await api.delete<void>(`/products/${id}`);
   }
 };
 

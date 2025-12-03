@@ -106,18 +106,18 @@ export function AddProductDialog({ categories = [] }: AddProductDialogProps) {
                       )}
                     />
                  </div>
-                 <div className="grid grid-cols-2 gap-4">
+                 <div className="grid grid-cols-1 gap-4">
                     <FormField
                       control={form.control}
                       name="barcode"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-200">Barkod (Ixtiyoriy)</FormLabel>
+                          <FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-200">Barkod *</FormLabel>
                           <FormControl>
                             <div className="relative">
                                 <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <Input 
-                                    placeholder="||||||||||" 
+                                    placeholder="Masalan: 1234567890" 
                                     {...field} 
                                     className="pl-10 h-11 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-[#00B8D9]/20 focus:border-[#00B8D9] transition-all rounded-xl font-medium" 
                                 />
@@ -127,7 +127,9 @@ export function AddProductDialog({ categories = [] }: AddProductDialogProps) {
                         </FormItem>
                       )}
                     />
-                    
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="stock"
@@ -145,6 +147,32 @@ export function AddProductDialog({ categories = [] }: AddProductDialogProps) {
                                 />
                              </div>
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="unit"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-200">O'lchov Birligi</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="h-11 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-[#00B8D9]/20 focus:border-[#00B8D9] rounded-xl font-medium">
+                                <SelectValue placeholder="Tanlang" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-white dark:bg-[#1C2C30] border-gray-100 dark:border-white/10 z-[9999]">
+                                <SelectItem value="dona">Dona</SelectItem>
+                                <SelectItem value="kg">Kg</SelectItem>
+                                <SelectItem value="metr">Metr</SelectItem>
+                                <SelectItem value="litr">Litr</SelectItem>
+                                <SelectItem value="blok">Blok</SelectItem>
+                                <SelectItem value="qop">Qop</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}

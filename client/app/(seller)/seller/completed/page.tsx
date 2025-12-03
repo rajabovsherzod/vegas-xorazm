@@ -65,7 +65,7 @@ export default function SellerCompletedPage() {
     return (
       <div
         className={cn(
-          "rounded-xl border bg-white dark:bg-[#132326] p-4 transition-all",
+          "rounded-xl border bg-white dark:bg-[#132326] p-4 transition-all shadow-md",
           order.status === "completed"
             ? "border-emerald-200 dark:border-emerald-900/30"
             : "border-gray-200 dark:border-white/10"
@@ -79,8 +79,8 @@ export default function SellerCompletedPage() {
                 order.status === "completed"
                   ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
                   : order.status === "cancelled"
-                  ? "bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400"
-                  : "bg-gray-100 dark:bg-white/5 text-muted-foreground"
+                    ? "bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400"
+                    : "bg-gray-100 dark:bg-white/5 text-muted-foreground"
               )}
             >
               <Package className="w-6 h-6" />
@@ -153,7 +153,7 @@ export default function SellerCompletedPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 md:p-6 lg:p-8 w-full max-w-7xl mx-auto space-y-6">
       <PageHeader
         title="Yakunlangan Buyurtmalar"
         description="Tasdiqlangan va bekor qilingan buyurtmalar tarixi"
@@ -181,4 +181,5 @@ export default function SellerCompletedPage() {
     </div>
   );
 }
+
 

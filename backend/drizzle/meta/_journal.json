@@ -22,6 +22,20 @@
       "when": 1764531592970,
       "tag": "0002_flaky_doctor_faustus",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1764672615409,
+      "tag": "0003_open_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1764680721484,
+      "tag": "0004_worthless_raza",
+      "breakpoints": true
     }
   ]
 }

@@ -1,23 +1,28 @@
 import { api } from "@/lib/api/api-client";
+import type { Category, CreateCategoryPayload, UpdateCategoryPayload } from "@/types/api";
 
-export interface Category {
-  id: number;
-  name: string;
-  description: string | null;
-  createdAt: string;
-  updatedAt: string;
+// Re-export types for backward compatibility
+export type { Category, CreateCategoryPayload };
+
+interface GetCategoriesParams {
+  search?: string;
+  page?: number;
+  limit?: number;
 }
 
-export interface CreateCategoryData {
-  name: string;
-  description?: string;
-}
-
+/**
+ * Category Service
+ * 
+ * Kategoriyalar bilan ishlash uchun API metodlari
+ */
 export const categoryService = {
-  getAll: async (query?: Record<string, any>) => {
+  /**
+   * Barcha kategoriyalarni olish
+   */
+  getAll: async (params?: GetCategoriesParams): Promise<Category[]> => {
     const searchParams = new URLSearchParams();
-    if (query) {
-      Object.entries(query).forEach(([key, value]) => {
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== "") {
           searchParams.append(key, String(value));
         }
@@ -28,14 +33,26 @@ export const categoryService = {
 
     return await api.get<Category[]>(endpoint);
   },
-  create: async (data: CreateCategoryData) => {
-    return await api.post("/categories", data);
+
+  /**
+   * Yangi kategoriya yaratish
+   */
+  create: async (data: CreateCategoryPayload): Promise<Category> => {
+    return await api.post<Category>("/categories", data);
   },
-  update: async (id: number, data: Partial<CreateCategoryData>) => {
-    return await api.patch(`/categories/${id}`, data);
+
+  /**
+   * Kategoriyani yangilash
+   */
+  update: async (id: number, data: UpdateCategoryPayload): Promise<Category> => {
+    return await api.patch<Category>(`/categories/${id}`, data);
   },
-  delete: async (id: number) => {
-    return await api.delete(`/categories/${id}`);
+
+  /**
+   * Kategoriyani o'chirish (soft delete)
+   */
+  delete: async (id: number): Promise<void> => {
+    return await api.delete<void>(`/categories/${id}`);
   }
 };
 

@@ -149,7 +149,7 @@ export function LoginForm() {
         {/* BUTTON */}
         <Button 
           type="submit" 
-          className="w-full h-12 text-[15px] rounded-xl shadow-cyan mt-2" 
+          className="w-full h-12 text-[15px] rounded-xl shadow-cyan mt-2 bg-[#00B8D9] hover:bg-[#00B8D9]/90 text-white" 
           disabled={isLoading}
         >
           {isLoading ? <Spinner className="mr-2 text-white" size="sm" /> : "Tizimga kirish"}

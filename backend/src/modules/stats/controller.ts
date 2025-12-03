@@ -8,3 +8,9 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
   res.status(200).json(new ApiResponse(200, stats, "Dashboard statistikasi"));
 });
 
+export const getOwnerStats = asyncHandler(async (req: Request, res: Response) => {
+  const stats = await statsService.getOwnerStats();
+  res.status(200).json(new ApiResponse(200, stats, "Owner biznes statistikasi"));
+});
+
+

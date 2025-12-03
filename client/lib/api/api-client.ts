@@ -1,4 +1,5 @@
 import { getSession, signOut } from "next-auth/react";
+import { ENV } from "@/lib/config/env";
 import {
   AppError,
   AuthenticationError,
@@ -9,8 +10,6 @@ import {
   ConflictError,
 } from "./errors";
 
-const API_URL = "http://localhost:5000/api/v1"; // .env dan olsa ham bo'ladi
-
 interface RequestOptions extends RequestInit {
   skipContentType?: boolean;
 }
@@ -19,34 +18,34 @@ class ApiClient {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = API_URL;
+    this.baseURL = ENV.API_URL;
   }
 
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     // 1. Tokenni olish
     let token: string | undefined;
-    
+
     if (typeof window === 'undefined') {
-       // Server-side: NextAuth'ning getServerSession'idan foydalanish kerak
-       // Lekin bu yerda oddiy getSession() serverda ishlamasligi mumkin yoki context kerak.
-       // Next.js 13+ da server componentlarda headers() yoki cookies() orqali token olish tavsiya qilinadi.
-       // Hozircha, agar serverda bo'lsak, va getSession ishlamasa, biz bu qismni o'tkazib yuborishimiz mumkin,
-       // yoki authOptions ni import qilib getServerSession(authOptions) ishlatishimiz kerak.
-       
-       // FIX: Server componentlardan to'g'ridan-to'g'ri chaqirilganda sessiya muammosi bo'lishi mumkin.
-       // Vaqtincha "Server Error" oldini olish uchun try-catch qo'yamiz.
-       try {
-         const { authOptions } = await import("@/lib/auth"); 
-         const { getServerSession } = await import("next-auth");
-         const session = await getServerSession(authOptions);
-         token = session?.user?.accessToken;
-       } catch (e) {
-         console.log("Serverda session olishda xatolik (ehtimol static generatsiya):", e);
-       }
+      // Server-side: NextAuth'ning getServerSession'idan foydalanish kerak
+      // Lekin bu yerda oddiy getSession() serverda ishlamasligi mumkin yoki context kerak.
+      // Next.js 13+ da server componentlarda headers() yoki cookies() orqali token olish tavsiya qilinadi.
+      // Hozircha, agar serverda bo'lsak, va getSession ishlamasa, biz bu qismni o'tkazib yuborishimiz mumkin,
+      // yoki authOptions ni import qilib getServerSession(authOptions) ishlatishimiz kerak.
+
+      // FIX: Server componentlardan to'g'ridan-to'g'ri chaqirilganda sessiya muammosi bo'lishi mumkin.
+      // Vaqtincha "Server Error" oldini olish uchun try-catch qo'yamiz.
+      try {
+        const { authOptions } = await import("@/lib/auth");
+        const { getServerSession } = await import("next-auth");
+        const session = await getServerSession(authOptions);
+        token = session?.user?.accessToken;
+      } catch (e) {
+        console.log("Serverda session olishda xatolik (ehtimol static generatsiya):", e);
+      }
     } else {
-       // Client-side
-       const session = await getSession();
-       token = session?.user?.accessToken;
+      // Client-side
+      const session = await getSession();
+      token = session?.user?.accessToken;
     }
 
     const { skipContentType, ...fetchOptions } = options;
@@ -80,16 +79,16 @@ class ApiClient {
       // 5. Muvaffaqiyatli javob
       // Bizning backend { success: true, data: ..., message: ... } qaytaradi
       const resJson = await response.json();
-      
+
       // DEBUG: Backenddan nima kelayotganini ko'rish uchun
       console.log(`API Response [${endpoint}]:`, resJson);
 
       // Agar backend massiv qaytarsa va u data ichida bo'lmasa (ba'zi backendlar to'g'ridan to'g'ri array qaytaradi)
-      if(Array.isArray(resJson)) return resJson as T;
+      if (Array.isArray(resJson)) return resJson as T;
 
       // Backend { success, data, message } formatida qaytaradi
       // data ni qaytaramiz
-      return resJson.data !== undefined ? resJson.data : resJson; 
+      return resJson.data !== undefined ? resJson.data : resJson;
 
     } catch (error) {
       if (error instanceof AppError) {

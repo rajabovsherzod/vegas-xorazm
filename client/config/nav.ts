@@ -9,7 +9,11 @@ import {
   BadgeDollarSign,
   Layers,
   CheckCircle,
-  Clock
+  Clock,
+  Monitor,
+  Server,
+  QrCode,
+  ScanLine
 } from "lucide-react";
 
 import { NavItem } from "@/components/layout/app-sidebar";
@@ -17,9 +21,6 @@ import { NavItem } from "@/components/layout/app-sidebar";
 export const ownerNav: NavItem[] = [
   { text: "Dashboard", url: "/owner/dashboard", icon: "LayoutDashboard" },
   { text: "Xodimlar", url: "/owner/staff", icon: "Users" },
-  { text: "Mahsulotlar", url: "/owner/products", icon: "Package" },
-  { text: "Moliya", url: "/owner/finance", icon: "BadgeDollarSign" },
-  { text: "Sozlamalar", url: "/owner/settings", icon: "Settings" },
 ];
 
 export const adminNav: NavItem[] = [
@@ -27,7 +28,14 @@ export const adminNav: NavItem[] = [
   { text: "Buyurtmalar", url: "/admin/orders", icon: "Clock" },
   { text: "Mahsulotlar", url: "/admin/products", icon: "Package" },
   { text: "Kategoriyalar", url: "/admin/categories", icon: "Layers" },
-  { text: "Hisobotlar", url: "/admin/reports", icon: "FileText" },
+  { text: "Kirimlar tarixi", url: "/admin/stock-history", icon: "FileText" },
+  { text: "QR Kod", url: "/admin/qr-code", icon: "QrCode" },
+  { text: "Scanner Test", url: "/admin/qr-scanner-test", icon: "ScanLine" },
+];
+
+export const superAdminNav: NavItem[] = [
+  { text: "Frontend Errors", url: "/superadmin/frontend-errors", icon: "Monitor" },
+  { text: "Backend Errors", url: "/superadmin/backend-errors", icon: "Server" },
 ];
 
 export const sellerNav: NavItem[] = [

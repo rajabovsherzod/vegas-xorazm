@@ -1,65 +1,50 @@
-"use client";
-
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { ENV } from "@/lib/config/env";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") || "http://localhost:5000";
-
-interface UseSocketOptions {
-  onNewOrder?: (data: any) => void;
-  onStockUpdate?: (data: { action: "add" | "subtract"; items: { id: number; quantity: number }[] }) => void;
-  onOrderStatusChange?: (data: { id: number; status: string }) => void;
-  isAdmin?: boolean;
-}
-
-export function useSocket(options: UseSocketOptions = {}) {
-  const socketRef = useRef<Socket | null>(null);
-  const { onNewOrder, onStockUpdate, onOrderStatusChange, isAdmin } = options;
+export function useSocket() {
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    // Socket ulanishini yaratish
-    socketRef.current = io(SOCKET_URL, {
-      transports: ["websocket", "polling"],
+    // Socket URL - telefon uchun to'g'ridan-to'g'ri IP
+    const wsUrl = typeof window !== 'undefined'
+      ? `http://${window.location.hostname}:5000`
+      : ENV.WS_URL;
+
+    console.log("🔌 Socket ulanish boshlandi. URL:", wsUrl);
+
+    // Socket ulanish
+    const socketInstance = io(wsUrl, {
+      transports: ["polling", "websocket"], // Polling birinchi (telefon uchun)
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 10000,
     });
 
-    const socket = socketRef.current;
-
-    socket.on("connect", () => {
-      console.log("🔌 Socket ulandi:", socket.id);
-      
-      // Admin bo'lsa admin xonasiga qo'shilish
-      if (isAdmin) {
-        socket.emit("join_admin");
-      }
+    socketInstance.on("connect", () => {
+      console.log("✅ Socket connected:", socketInstance.id);
     });
 
-    // Event listenerlar
-    if (onNewOrder) {
-      socket.on("new_order", onNewOrder);
-    }
-
-    if (onStockUpdate) {
-      socket.on("stock_update", onStockUpdate);
-    }
-
-    if (onOrderStatusChange) {
-      socket.on("order_status_change", onOrderStatusChange);
-    }
-
-    socket.on("disconnect", () => {
-      console.log("❌ Socket uzildi");
+    socketInstance.on("disconnect", (reason) => {
+      console.log("❌ Socket disconnected:", reason);
     });
 
-    // Cleanup
+    socketInstance.on("connect_error", (error) => {
+      console.error("❌ Socket connect error:", error.message);
+    });
+
+    socketInstance.on("reconnect_attempt", (attempt) => {
+      console.log(`🔄 Reconnect attempt ${attempt}`);
+    });
+
+    setSocket(socketInstance);
+
     return () => {
-      socket.disconnect();
+      console.log("🔌 Socket disconnect qilinmoqda");
+      socketInstance.disconnect();
     };
-  }, [onNewOrder, onStockUpdate, onOrderStatusChange, isAdmin]);
-
-  const emit = useCallback((event: string, data?: any) => {
-    socketRef.current?.emit(event, data);
   }, []);
 
-  return { emit, socket: socketRef.current };
+  return socket;
 }
-

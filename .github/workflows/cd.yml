@@ -1,0 +1,91 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      
+      # Backend Deployment
+      - name: Deploy Backend
+        run: |
+          echo "🚀 Deploying backend to production..."
+          # Add your deployment commands here
+          # Example: SSH to server and pull latest code
+          # ssh user@server 'cd /app/backend && git pull && pnpm install && pnpm run build && pm2 restart backend'
+      
+      # Frontend Deployment
+      - name: Deploy Frontend
+        run: |
+          echo "🚀 Deploying frontend to production..."
+          # Add your deployment commands here
+          # Example: Deploy to Vercel
+          # npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
+      
+      - name: Notify deployment
+        run: |
+          echo "✅ Deployment completed successfully!"
+          # Add notification logic here (Slack, Discord, etc.)
+
+  # Docker Build & Push (Optional)
+  docker:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+      - name: Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/vegas-backend:latest
+            ${{ secrets.DOCKER_USERNAME }}/vegas-backend:${{ steps.version.outputs.VERSION }}
+      
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/vegas-frontend:latest
+            ${{ secrets.DOCKER_USERNAME }}/vegas-frontend:${{ steps.version.outputs.VERSION }}
+

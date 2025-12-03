@@ -13,7 +13,7 @@ export const useCreateUser = (onSuccess?: () => void) => {
     onSuccess: () => {
       // Avval query invalidate qilamiz (client-side data yangilash uchun)
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      
+
       // 🔥 MUHIM: Server Componentni yangilash uchun router.refresh()
       router.refresh();
 

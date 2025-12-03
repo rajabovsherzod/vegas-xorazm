@@ -60,11 +60,11 @@ export function KPICard({
 
   if (loading) {
     return (
-      <div className={cn("h-[120px] rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] p-6 animate-pulse", className)}>
+      <div className={cn("h-[120px] rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] p-6 animate-pulse shadow-md", className)}>
         <div className="flex justify-between items-start">
           <div className="space-y-3">
-             <div className="h-4 w-24 bg-gray-200 dark:bg-white/5 rounded" />
-             <div className="h-8 w-32 bg-gray-200 dark:bg-white/5 rounded" />
+            <div className="h-4 w-24 bg-gray-200 dark:bg-white/5 rounded" />
+            <div className="h-8 w-32 bg-gray-200 dark:bg-white/5 rounded" />
           </div>
           <div className="h-12 w-12 rounded-xl bg-gray-200 dark:bg-white/5" />
         </div>
@@ -77,33 +77,33 @@ export function KPICard({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] p-6 transition-colors duration-300",
+        "group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] p-6 transition-all duration-300 shadow-md hover:shadow-lg",
         colors.border,
         className
       )}
     >
       <div className="flex justify-between items-start">
         <div className="flex flex-col justify-between h-full space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <div className="flex items-baseline gap-1.5">
-                <h3 className="text-3xl font-bold text-[#212B36] dark:text-white tracking-tight">
-                    {formattedValue}
-                </h3>
-                {format === "currency" && (
-                    <span className="text-sm font-semibold text-muted-foreground">UZS</span>
-                )}
-            </div>
-            {description && (
-              <p className="text-xs font-medium text-muted-foreground/80 pt-1">{description}</p>
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <div className="flex items-baseline gap-1.5">
+            <h3 className="text-3xl font-bold text-[#212B36] dark:text-white tracking-tight">
+              {formattedValue}
+            </h3>
+            {format === "currency" && (
+              <span className="text-sm font-semibold text-muted-foreground">UZS</span>
             )}
+          </div>
+          {description && (
+            <p className="text-xs font-medium text-muted-foreground/80 pt-1">{description}</p>
+          )}
         </div>
-        
+
         <div className={cn(
-          "flex items-center justify-center w-12 h-12 rounded-xl transition-colors duration-300", 
-          colors.iconBg, 
+          "flex items-center justify-center w-12 h-12 rounded-xl transition-colors duration-300",
+          colors.iconBg,
           colors.iconColor
         )}>
-            {icon}
+          {icon}
         </div>
       </div>
     </div>

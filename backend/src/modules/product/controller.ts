@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import asyncHandler from "@/utils/asyncHandler";
 import ApiResponse from "@/utils/ApiResponse";
 import { productService } from "./service"; 
+import { AuthRequest } from "@/middlewares/auth"; 
 
 // 1. GET ALL
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
@@ -25,4 +26,12 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response) =>
 export const deleteProduct = asyncHandler(async (req: Request, res: Response) => {
   await productService.delete(Number(req.params.id));
   res.status(200).json(new ApiResponse(200, null, "Mahsulot o'chirildi"));
+});
+
+// 5. ADD STOCK
+export const addStock = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { quantity, newPrice } = req.body;
+  const adminId = req.user.id;
+  const result = await productService.addStock(Number(req.params.id), Number(quantity), newPrice ? Number(newPrice) : undefined, adminId);
+  res.status(200).json(new ApiResponse(200, result, "Mahsulot kirim qilindi"));
 });

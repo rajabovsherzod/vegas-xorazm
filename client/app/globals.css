@@ -12,10 +12,15 @@
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-border: var(--sidebar-border);
-  
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-button: var(--sidebar-button);
+  --color-header: var(--header);
+  --color-header-foreground: var(--header-foreground);
+  --color-workspace: var(--workspace);
+
   /* BIZNING MAXSUS RANG */
-  --color-brand: var(--primary); 
-  
+  --color-brand: var(--primary);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -24,40 +29,86 @@
 /* ☀️ LIGHT MODE (MUI Style - Toza Oq) */
 :root {
   /* ASOSIY FON */
-  --background: 210 14% 96%; /* #F4F6F8 (Yumshoq kulrang fon) */
-  --foreground: 210 10% 23%; /* #212B36 (To'q yozuv) */
+  --background: 210 14% 96%;
+  /* #F4F6F8 (Yumshoq kulrang fon) */
+  --foreground: 210 10% 23%;
+  /* #212B36 (To'q yozuv) */
 
-  /* SIDEBAR (Light Mode - OQ bo'lishi SHART) */
-  --sidebar: 0 0% 100%; /* #FFFFFF */
-  --sidebar-foreground: 210 10% 23%; /* #212B36 */
-  --sidebar-border: 210 14% 89%; /* #919EAB */
-  
+  /* SIDEBAR (Light Mode - Dark mode rangini saqlab qolish) */
+  --sidebar: 190 33% 11%;
+  /* #132326 - Dark mode rangini saqlab qolish */
+  --sidebar-foreground: 215 20.2% 65.1%;
+  /* Dark mode foreground */
+  --sidebar-border: 190 20% 18%;
+  /* Dark mode border */
+  --sidebar-hover: 190 20% 18%;
+  /* Dark mode hover */
+  --sidebar-button: 190 25% 15%;
+  /* Dark mode button */
+
+  /* HEADER (Light Mode - Dark mode rangini saqlab qolish) */
+  --header: 190 33% 11%;
+  /* #132326 - Dark mode rangini saqlab qolish */
+  --header-foreground: 215 20.2% 65.1%;
+  /* Dark mode foreground */
+
+  /* WORKSPACE (Light Mode - Cyan ranglariga mos, ochirroq rang, cardlar shadow bilan ajralib ko'rinishi uchun) */
+  --workspace: 186 30% 98%;
+  /* Cyan-50 ga o'xshash, ochirroq rang, oq cardlar shadow bilan ajralib ko'rinadi */
+
   /* PRIMARY (CYAN - #00B8D9) */
-  --primary: #00B8D9; 
-  
+  --primary: #00B8D9;
+
   /* RADIUS */
-  --radius: 0.5rem; /* 8px - Standart o'lcham (juda katta emas) */
+  --radius: 0.5rem;
+  /* 8px - Standart o'lcham (juda katta emas) */
 }
 
 /* 🌙 DARK MODE */
 .dark {
-  --background: 190 40% 8%; /* #0D1B1E */
+  --background: 190 40% 8%;
+  /* #0D1B1E */
   --foreground: 0 0% 100%;
 
   /* SIDEBAR (Dark Mode - To'q Teal) */
-  --sidebar: 190 33% 11%; /* #132326 */
+  --sidebar: 190 33% 11%;
+  /* #132326 */
   --sidebar-foreground: 215 20.2% 65.1%;
   --sidebar-border: 190 20% 18%;
+  --sidebar-hover: 190 20% 18%;
+  /* Dark mode hover */
+  --sidebar-button: 190 25% 15%;
+  /* Dark mode button */
 
-  --primary: #00B8D9; 
+  /* HEADER (Dark Mode - Sidebar bilan bir xil) */
+  --header: 190 33% 11%;
+  /* #132326 */
+  --header-foreground: 215 20.2% 65.1%;
+
+  /* WORKSPACE (Dark Mode) */
+  --workspace: 190 40% 8%;
+  /* #0D1B1E */
+
+  --primary: #00B8D9;
 }
 
 @layer base {
   * {
     @apply border-gray-200 dark:border-white/10;
   }
+
+  html {
+    @apply h-full overflow-hidden;
+  }
+
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased h-full overflow-hidden;
+    font-family: var(--font-jakarta), system-ui, -apple-system, sans-serif;
+  }
+
+  /* Font consistency */
+  * {
+    font-family: inherit;
   }
 }
 
@@ -66,7 +117,26 @@
   .shadow-cyan {
     box-shadow: 0 8px 16px 0 rgba(0, 184, 217, 0.24);
   }
+
   .shadow-card-custom {
     box-shadow: 0px 12px 24px -4px rgba(145, 158, 171, 0.12);
+  }
+
+  /* Screen Reader Only - Accessibility */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* Focus visible - Keyboard navigation */
+  .focus-visible-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00B8D9] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#0D1B1E];
   }
 }

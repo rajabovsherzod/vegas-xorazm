@@ -17,7 +17,11 @@ import {
   BadgeDollarSign,
   Layers,
   CheckCircle,
-  Clock
+  Clock,
+  Monitor,
+  Server,
+  QrCode,
+  ScanLine
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -37,6 +41,10 @@ const iconMap = {
   Layers: Layers,
   CheckCircle: CheckCircle,
   Clock: Clock,
+  Monitor: Monitor,
+  Server: Server,
+  QrCode: QrCode,
+  ScanLine: ScanLine,
 };
 
 // Navigatsiya elementi tipi
@@ -48,7 +56,7 @@ export interface NavItem {
 
 interface SidebarProps {
   defaultOpen: boolean;
-  navItems: NavItem[]; 
+  navItems: NavItem[];
   className?: string;
 }
 
@@ -82,18 +90,19 @@ export function AppSidebar({ defaultOpen, navItems, className }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "relative flex flex-col h-screen border-r border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] z-50",
+        "relative flex flex-col h-screen border-r border-white/10 z-50",
+        "bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]",
         "transition-[width] duration-300 cubic-bezier(0.4, 0, 0.2, 1)", // Silliq animatsiya
         isOpen ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
         className
       )}
     >
-      
+
       {/* --- TOGGLE BUTTON (DIZAYN O'ZGARIShSIZ QOLDI) --- */}
       <div className="absolute -right-3 top-9 z-50">
         <button
           onClick={toggleSidebar}
-          className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-md transition-transform hover:bg-gray-100 hover:text-primary dark:border-white/10 dark:bg-[#1C2C30] dark:text-white"
+          className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[hsl(var(--sidebar-button))] text-[hsl(var(--sidebar-foreground))] shadow-md transition-transform hover:bg-[hsl(var(--sidebar-hover))] hover:text-white dark:border-white/10 dark:bg-[#1C2C30] dark:text-white"
         >
           <ChevronLeft className={cn("h-3 w-3 transition-transform duration-300", !isOpen && "rotate-180")} />
         </button>
@@ -107,13 +116,13 @@ export function AppSidebar({ defaultOpen, navItems, className }: SidebarProps) {
             <Store className="h-5 w-5" />
           </div>
         </div>
-        
+
         {/* LOGO MATNI (Silliq chiqadi) */}
         <div className={cn(
           "whitespace-nowrap transition-all duration-300 origin-left flex flex-col justify-center",
           isOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 w-0 overflow-hidden"
         )}>
-          <span className="text-xl font-extrabold text-[#212B36] dark:text-white leading-none tracking-tight">Vegas</span>
+          <span className="text-xl font-extrabold text-[hsl(var(--sidebar-foreground))] leading-none tracking-tight">Vegas</span>
         </div>
       </div>
 
@@ -121,19 +130,19 @@ export function AppSidebar({ defaultOpen, navItems, className }: SidebarProps) {
       <div className="flex-1 space-y-2 overflow-x-hidden py-4">
         <TooltipProvider delayDuration={0}>
           {navigationItems.map((item) => { // ✅ Endi prop orqali kelgan elementlar
-            const isActive = pathname === item.url; 
+            const isActive = pathname === item.url;
             const Icon = item.Icon; // ✅ Dinamik Ikonka komponenti
-            
+
             return (
-              <Tooltip key={item.url} disableHoverableContent={isOpen}> 
+              <Tooltip key={item.url} disableHoverableContent={isOpen}>
                 <TooltipTrigger asChild>
                   <Link
                     href={item.url}
                     className={cn(
-                      "group flex items-center h-12 relative transition-all duration-200 mx-3 rounded-xl overflow-hidden", 
-                      isActive 
-                        ? "bg-[#00B8D9]/10 text-[#00B8D9] hover:bg-[#00B8D9]/15 hover:text-[#00B8D9]" 
-                        : "text-[#637381] dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-white/5 hover:text-[#212B36] dark:hover:text-white",
+                      "group flex items-center h-12 relative transition-all duration-200 mx-3 rounded-xl overflow-hidden",
+                      isActive
+                        ? "bg-[#00B8D9]/10 text-[#00B8D9] hover:bg-[#00B8D9]/15 hover:text-[#00B8D9]"
+                        : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-white",
                     )}
                   >
                     {/* IKONKA KONTEYNERI (Fixed Position) */}
@@ -153,12 +162,12 @@ export function AppSidebar({ defaultOpen, navItems, className }: SidebarProps) {
                     {isActive && (
                       <div className={cn(
                         "absolute right-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-l-full bg-[#00B8D9] transition-all duration-300",
-                        !isOpen && "opacity-0" 
+                        !isOpen && "opacity-0"
                       )} />
                     )}
                   </Link>
                 </TooltipTrigger>
-                
+
                 {/* TOOLTIP: Faqat yopiq bo'lsa */}
                 {!isOpen && (
                   <TooltipContent side="right" className="bg-[#212B36] text-white border-0 font-bold ml-2">
@@ -172,12 +181,12 @@ export function AppSidebar({ defaultOpen, navItems, className }: SidebarProps) {
       </div>
 
       {/* --- FOOTER (LOGOUT) (DIZAYN O'ZGARIShSIZ QOLDI) --- */}
-      <div className="p-3 border-t border-gray-200 dark:border-white/5 mt-auto">
+      <div className="p-3 border-t border-white/5 mt-auto">
         <TooltipProvider>
           <Tooltip disableHoverableContent={isOpen}>
             <TooltipTrigger asChild>
-              <button 
-                onClick={() => signOut({ callbackUrl: "/login" })}
+              <button
+                onClick={() => signOut({ callbackUrl: "/auth/login" })}
                 className={cn(
                   "w-full h-12 flex items-center rounded-xl text-[#FF5630] hover:bg-[#FF5630]/10 hover:text-[#FF5630] transition-all relative overflow-hidden",
                 )}
@@ -186,7 +195,7 @@ export function AppSidebar({ defaultOpen, navItems, className }: SidebarProps) {
                 <div className="min-w-[56px] h-full flex items-center justify-center shrink-0">
                   <LogOut className="h-5 w-5" />
                 </div>
-                
+
                 {/* Matn */}
                 <span className={cn(
                   "font-bold text-[14px] whitespace-nowrap transition-all duration-300",

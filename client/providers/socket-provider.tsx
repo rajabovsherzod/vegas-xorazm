@@ -5,8 +5,7 @@ import { io, Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") || "http://localhost:5000";
+import { ENV } from "@/lib/config/env";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -36,7 +35,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
     if (!session?.user) return;
 
     // Socket ulanishini yaratish
-    const socket = io(SOCKET_URL, {
+    const socket = io(ENV.WS_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionDelay: 1000,
@@ -64,13 +63,13 @@ export function SocketProvider({ children }: SocketProviderProps) {
     // 🔥 YANGI ORDER (Admin uchun)
     socket.on("new_order", (data: any) => {
       console.log("📦 Yangi order keldi:", data);
-      
+
       // Orders ro'yxatini yangilash
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-      
+
       // Dashboard statsni yangilash
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      
+
       // Toast xabari
       toast.success(`Yangi buyurtma #${data.id}`, {
         description: `${data.customerName || "Mijoz"} - ${new Intl.NumberFormat("uz-UZ").format(Number(data.totalAmount))} UZS`,
@@ -80,10 +79,10 @@ export function SocketProvider({ children }: SocketProviderProps) {
     // 🔥 OMBOR YANGILANDI
     socket.on("stock_update", (data: { action: "add" | "subtract"; items: { id: number; quantity: number }[] }) => {
       console.log("📊 Ombor yangilandi:", data);
-      
+
       // Mahsulotlar ro'yxatini yangilash
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      
+
       if (data.action === "subtract") {
         toast.info("Ombor yangilandi", {
           description: `${data.items.length} ta mahsulot miqdori kamaydi`,
@@ -98,14 +97,14 @@ export function SocketProvider({ children }: SocketProviderProps) {
     // 🔥 ORDER STATUS O'ZGARDI
     socket.on("order_status_change", (data: { id: number; status: string }) => {
       console.log("✅ Order status o'zgardi:", data);
-      
+
       // Orders ro'yxatini yangilash
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["seller-orders"] });
-      
+
       // Dashboard statsni yangilash
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      
+
       // Toast xabari
       if (data.status === "completed") {
         toast.success(`Buyurtma #${data.id} tasdiqlandi`);
@@ -128,4 +127,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
     </SocketContext.Provider>
   );
 }
+
+
+
 
