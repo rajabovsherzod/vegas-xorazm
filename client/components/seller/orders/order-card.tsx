@@ -10,7 +10,7 @@ import {
   Calendar,
   Package,
   User,
-  Trash2 // O'chirish uchun
+  Trash2
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,11 +27,10 @@ interface OrderCardProps {
   order: Order;
   onEdit: (order: Order) => void;
   onView?: (order: Order) => void;
-  onDelete?: (order: Order) => void; // 🔥 O'chirish funksiyasi qo'shildi
+  onDelete?: (order: Order) => void;
 }
 
 export function OrderCard({ order, onEdit, onView, onDelete }: OrderCardProps) {
-  // Faqat Draft holatda tahrirlash va o'chirish mumkin
   const isDraft = order.status === "draft";
 
   // Status ranglari
@@ -73,11 +72,11 @@ export function OrderCard({ order, onEdit, onView, onDelete }: OrderCardProps) {
           </div>
 
           <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium">
-            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-md">
+            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-md border border-gray-100 dark:border-white/5">
               <Calendar className="h-3.5 w-3.5 opacity-70" />
               {format(new Date(order.createdAt), "dd.MM HH:mm")}
             </div>
-            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-md">
+            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-md border border-gray-100 dark:border-white/5">
               <Package className="h-3.5 w-3.5 opacity-70" />
               {order.items?.length || 0} ta
             </div>
@@ -96,14 +95,15 @@ export function OrderCard({ order, onEdit, onView, onDelete }: OrderCardProps) {
           </div>
         </div>
 
-        {/* --- 3. O'NG: Action Button (Katta va Dumaloq) --- */}
-        <div className="pl-2 border-l border-gray-100 dark:border-white/5">
-          <DropdownMenu>
+        {/* --- 3. O'NG: Action Button --- */}
+        <div className="pl-3 border-l border-gray-100 dark:border-white/5 ml-1">
+          {/* 🔥 modal={false} -> Scroll bloklanmasligi uchun */}
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-11 w-11 rounded-full bg-gray-50 dark:bg-white/5 text-gray-500 hover:text-[#00B8D9] hover:bg-[#00B8D9]/10 transition-all active:scale-95"
+                className="h-11 w-11 rounded-full bg-gray-50 dark:bg-white/5 text-gray-500 hover:text-[#00B8D9] hover:bg-[#00B8D9]/10 transition-all active:scale-95 border border-transparent hover:border-[#00B8D9]/20"
               >
                 <MoreHorizontal className="h-6 w-6" />
               </Button>
@@ -111,7 +111,7 @@ export function OrderCard({ order, onEdit, onView, onDelete }: OrderCardProps) {
             
             <DropdownMenuContent 
               align="end" 
-              className="w-48 bg-white dark:bg-[#1C2526] border-gray-200 dark:border-white/10 shadow-xl p-1"
+              className="w-48 bg-white dark:bg-[#1C2526] border-gray-200 dark:border-white/10 shadow-xl p-1 z-[50]"
             >
               {/* KO'RISH */}
               {onView && (
