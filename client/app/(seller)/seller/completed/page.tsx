@@ -11,6 +11,7 @@ import { Clock, CheckCircle2, RefreshCw } from "lucide-react";
 import { orderService } from "@/lib/services/order.service";
 import { useSocket } from "@/hooks/use-socket";
 import type { Order } from "@/types/api";
+import { OrderCard } from "@/components/seller/orders/order-card";
 
 // Components
 import { Badge } from "@/components/ui/badge";
@@ -127,13 +128,33 @@ export default function SellerOrdersPage() {
 
         {/* TABLE CONTENT */}
         {isLoading ? (
-          <TableSkeleton columnCount={6} rowCount={8} />
+          // Loading: Uzun skeletonlar
+          <div className="space-y-3">
+             {[1,2,3,4,5].map(i => (
+                <div key={i} className="h-24 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse w-full" />
+             ))}
+          </div>
         ) : currentOrders.length === 0 ? (
           <EmptyState type={activeTab} />
         ) : (
-          <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] overflow-hidden shadow-sm">
-            <DataTable columns={columns} data={currentOrders} />
-          </div>
+          <>
+            {/* DESKTOP: Table (Katta ekranlar uchun) */}
+            <div className="hidden xl:block rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] overflow-hidden shadow-sm">
+              <DataTable columns={columns} data={currentOrders} />
+            </div>
+
+            {/* TABLET & MOBILE: Card List (Uzun ro'yxat) */}
+            {/* xl:hidden -> Juda katta ekranda yashirinadi, qolganida ko'rinadi */}
+            <div className="xl:hidden flex flex-col space-y-3">
+              {currentOrders.map((order) => (
+                <OrderCard 
+                  key={order.id} 
+                  order={order} 
+                  onEdit={handleEdit} 
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
