@@ -9,13 +9,15 @@ import {
   Eye,
   Calendar,
   Package,
-  User
+  User,
+  Trash2 // O'chirish uchun
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,12 +27,14 @@ interface OrderCardProps {
   order: Order;
   onEdit: (order: Order) => void;
   onView?: (order: Order) => void;
+  onDelete?: (order: Order) => void; // 🔥 O'chirish funksiyasi qo'shildi
 }
 
-export function OrderCard({ order, onEdit, onView }: OrderCardProps) {
+export function OrderCard({ order, onEdit, onView, onDelete }: OrderCardProps) {
+  // Faqat Draft holatda tahrirlash va o'chirish mumkin
   const isDraft = order.status === "draft";
 
-  // Status ranglari (Professional va Toza)
+  // Status ranglari
   const statusConfig: Record<string, { label: string; className: string }> = {
     draft: { 
       label: "Kutilmoqda", 
@@ -49,96 +53,107 @@ export function OrderCard({ order, onEdit, onView }: OrderCardProps) {
   const statusInfo = statusConfig[order.status] || statusConfig.draft;
 
   return (
-    <div className="group relative bg-white dark:bg-[#132326] rounded-xl border border-gray-200 dark:border-white/5 p-3.5 shadow-sm transition-all duration-200 hover:border-[#00B8D9]/50 hover:shadow-md select-none">
+    <div className="group relative bg-white dark:bg-[#132326] rounded-2xl border border-gray-200 dark:border-white/5 p-4 shadow-sm transition-all duration-200 hover:border-[#00B8D9]/50 hover:shadow-md select-none">
       
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         
-        {/* --- CHAP TOMON (ID, Status, Info) --- */}
-        <div className="flex flex-col gap-2 min-w-0">
+        {/* --- 1. CHAP TOMON: ID, Status, Info --- */}
+        <div className="flex flex-col gap-2 min-w-0 flex-1">
           
-          {/* 1. ID va Status Badge */}
           <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-gray-900 dark:text-white leading-none">
+            <span className="text-lg font-bold text-gray-900 dark:text-white leading-none">
               #{order.id}
             </span>
             <Badge 
               variant="outline" 
-              className={cn("px-1.5 py-0 text-[10px] h-5 font-semibold border uppercase tracking-wide", statusInfo.className)}
+              className={cn("px-2 py-0.5 text-[10px] font-semibold border uppercase tracking-wide rounded-md", statusInfo.className)}
             >
               {statusInfo.label}
             </Badge>
           </div>
 
-          {/* 2. Sana va Package (Kulrang, ixcham) */}
           <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium">
-            <div className="flex items-center gap-1">
-              <Calendar className="h-3 w-3 opacity-70" />
+            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-md">
+              <Calendar className="h-3.5 w-3.5 opacity-70" />
               {format(new Date(order.createdAt), "dd.MM HH:mm")}
             </div>
-            <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-            <div className="flex items-center gap-1">
-              <Package className="h-3 w-3 opacity-70" />
+            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-md">
+              <Package className="h-3.5 w-3.5 opacity-70" />
               {order.items?.length || 0} ta
             </div>
           </div>
         </div>
 
-        {/* --- O'NG TOMON (Narx, Action, Mijoz) --- */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
+        {/* --- 2. O'RTA: Narx va Mijoz --- */}
+        <div className="flex flex-col items-end justify-center gap-1 text-right">
+          <span className="text-lg font-bold text-[#00B8D9] tracking-tight leading-none">
+            {formatCurrency(Number(order.finalAmount), "UZS")}
+          </span>
           
-          {/* 1. Narx va Action Button */}
-          <div className="flex items-center gap-2">
-            {/* NARX: Asosiy urg'u (Teal rangda) */}
-            <span className="text-base font-bold text-[#00B8D9] tracking-tight">
-              {formatCurrency(Number(order.finalAmount), "UZS")}
-            </span>
-            
-            {/* ACTION BUTTON */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-7 w-7 -mr-2 text-gray-400 hover:text-[#00B8D9] hover:bg-[#00B8D9]/10 transition-colors"
-                >
-                  <MoreHorizontal className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              
-              {/* DROPDOWN CONTENT (To'g'rilangan ranglar) */}
-              <DropdownMenuContent 
-                align="end" 
-                className="w-44 bg-white dark:bg-[#132326] border-gray-200 dark:border-white/10 shadow-xl"
+          <div className="flex items-center justify-end gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 max-w-[120px]">
+            <span className="truncate">{order.customerName || "Mijoz yo'q"}</span>
+            <User className="h-3.5 w-3.5 opacity-50 shrink-0" />
+          </div>
+        </div>
+
+        {/* --- 3. O'NG: Action Button (Katta va Dumaloq) --- */}
+        <div className="pl-2 border-l border-gray-100 dark:border-white/5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-11 w-11 rounded-full bg-gray-50 dark:bg-white/5 text-gray-500 hover:text-[#00B8D9] hover:bg-[#00B8D9]/10 transition-all active:scale-95"
               >
-                {onView && (
-                  <DropdownMenuItem 
-                    onClick={() => onView(order)} 
-                    className="cursor-pointer py-2 focus:bg-gray-100 dark:focus:bg-[#00B8D9]/10 dark:focus:text-[#00B8D9]"
-                  >
-                    <Eye className="mr-2 h-4 w-4 opacity-70" /> 
-                    Ko'rish
-                  </DropdownMenuItem>
-                )}
-                {isDraft && (
+                <MoreHorizontal className="h-6 w-6" />
+              </Button>
+            </DropdownMenuTrigger>
+            
+            <DropdownMenuContent 
+              align="end" 
+              className="w-48 bg-white dark:bg-[#1C2526] border-gray-200 dark:border-white/10 shadow-xl p-1"
+            >
+              {/* KO'RISH */}
+              {onView && (
+                <DropdownMenuItem 
+                  onClick={() => onView(order)} 
+                  className="cursor-pointer py-2.5 px-3 rounded-lg focus:bg-gray-100 dark:focus:bg-[#00B8D9]/10 dark:focus:text-[#00B8D9] font-medium"
+                >
+                  <Eye className="mr-2 h-4 w-4 opacity-70" /> 
+                  Ko'rish
+                </DropdownMenuItem>
+              )}
+
+              {/* TAHRIRLASH (Faqat Draft bo'lsa) */}
+              {isDraft && (
+                <>
                   <DropdownMenuItem 
                     onClick={() => onEdit(order)} 
-                    className="cursor-pointer py-2 text-amber-600 dark:text-amber-500 focus:bg-amber-50 dark:focus:bg-amber-500/10 focus:text-amber-700"
+                    className="cursor-pointer py-2.5 px-3 rounded-lg text-amber-600 dark:text-amber-500 focus:bg-amber-50 dark:focus:bg-amber-500/10 focus:text-amber-700 font-medium"
                   >
                     <Edit className="mr-2 h-4 w-4" /> 
                     Tahrirlash
                   </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {/* 2. Mijoz Ismi (Kichikroq va o'ngga taqalgan) */}
-          <div className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 max-w-[140px] truncate">
-            <User className="h-3 w-3 opacity-50" />
-            <span className="truncate">{order.customerName || "Mijoz yo'q"}</span>
-          </div>
-          
+                  
+                  {/* O'CHIRISH (Faqat Draft bo'lsa) */}
+                  {onDelete && (
+                    <>
+                      <DropdownMenuSeparator className="bg-gray-100 dark:bg-white/5 my-1" />
+                      <DropdownMenuItem 
+                        onClick={() => onDelete(order)} 
+                        className="cursor-pointer py-2.5 px-3 rounded-lg text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-500/10 focus:text-rose-700 font-medium"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> 
+                        Bekor qilish
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+
       </div>
     </div>
   );
