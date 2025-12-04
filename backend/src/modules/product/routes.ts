@@ -1,9 +1,8 @@
 import { Router } from "express";
-import { createProduct, deleteProduct, getProducts, updateProduct, addStock } from "./controller";
+import { createProduct, deleteProduct, getProducts, updateProduct } from "./controller";
 import { validate } from "@/middlewares/validate";
 import { sanitizeInput } from "@/middlewares/sanitize";
 import { createProductSchema, updateProductSchema } from "./validation";
-import { protect } from "@/middlewares/auth";
 
 const router = Router();
 
@@ -23,7 +22,5 @@ router.route("/:id")
     updateProduct
   )
   .delete(deleteProduct);
-
-router.post("/:id/stock", protect, sanitizeInput(), addStock);
 
 export default router;

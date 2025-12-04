@@ -36,6 +36,7 @@ export interface PaginatedResponse<T> {
 // ============================================================================
 
 export interface Product {
+  code: string;
   id: number;
   name: string;
   barcode: string;
@@ -272,4 +273,7 @@ export interface SocketOrderStatusChangeEvent {
   id: number;
   status: OrderStatus;
 }
+
+
+
 

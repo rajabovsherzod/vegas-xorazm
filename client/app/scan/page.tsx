@@ -186,3 +186,4 @@ function getDeviceInfo() {
   return { device, browser };
 }
 
+

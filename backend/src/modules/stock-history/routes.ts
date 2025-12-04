@@ -10,8 +10,3 @@ router.use(authorize('cashier', 'owner'));
 router.get("/", getStockHistory);
 
 export default router;
-
-
-
-
-

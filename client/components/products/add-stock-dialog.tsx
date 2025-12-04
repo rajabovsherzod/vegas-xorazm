@@ -230,3 +230,91 @@ export function AddStockDialog({ products }: AddStockDialogProps) {
   );
 }
 
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="h-11 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 font-semibold">
+                Bekor qilish
+              </Button>
+              <Button
+                type="submit"
+                disabled={addStockMutation.isPending || !selectedProduct || !quantity}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white h-11 rounded-xl px-8 font-bold shadow-lg shadow-emerald-600/25 transition-all active:scale-95"
+              >
+                {addStockMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Saqlanmoqda...
+                  </>
+                ) : (
+                  "Saqlash"
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="h-11 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 font-semibold">
+                Bekor qilish
+              </Button>
+              <Button
+                type="submit"
+                disabled={addStockMutation.isPending || !selectedProduct || !quantity}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white h-11 rounded-xl px-8 font-bold shadow-lg shadow-emerald-600/25 transition-all active:scale-95"
+              >
+                {addStockMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Saqlanmoqda...
+                  </>
+                ) : (
+                  "Saqlash"
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="h-11 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 font-semibold">
+                Bekor qilish
+              </Button>
+              <Button
+                type="submit"
+                disabled={addStockMutation.isPending || !selectedProduct || !quantity}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white h-11 rounded-xl px-8 font-bold shadow-lg shadow-emerald-600/25 transition-all active:scale-95"
+              >
+                {addStockMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Saqlanmoqda...
+                  </>
+                ) : (
+                  "Saqlash"
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

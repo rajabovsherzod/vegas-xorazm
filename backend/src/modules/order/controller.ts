@@ -2,55 +2,84 @@ import { Request, Response } from "express";
 import { orderService } from "./service";
 import asyncHandler from "@/utils/asyncHandler";
 import ApiResponse from "@/utils/ApiResponse";
-import { AuthRequest } from "@/middlewares/auth"; // User ID olish uchun
+import { AuthRequest } from "@/middlewares/auth";
 
-// 1. CREATE ORDER (Seller yaratadi)
+/**
+ * 1. CREATE ORDER
+ * Seller, Cashier yoki Owner yangi buyurtma (draft) yaratadi
+ */
 export const createOrder = asyncHandler(async (req: AuthRequest, res: Response) => {
-  // Token ichidan user ID sini olamiz (bu Seller ID bo'ladi)
   const userId = req.user.id;
-
-  // Serviceni chaqiramiz
   const result = await orderService.create(userId, req.body);
-
-  res.status(201).json(new ApiResponse(201, result, "Buyurtma qabul qilindi (Draft)"));
+  
+  res.status(201).json(new ApiResponse(201, result, "Buyurtma muvaffaqiyatli yaratildi"));
 });
 
-// 2. GET ALL ORDERS (Tarixni ko'rish)
-export const getOrders = asyncHandler(async (req: Request, res: Response) => {
-  const result = await orderService.getAll();
-  res.status(200).json(new ApiResponse(200, result, "Buyurtmalar tarixi"));
+/**
+ * 2. GET ALL ORDERS
+ * Rolga qarab filterlanadi:
+ * - Seller: Faqat o'z buyurtmalari
+ * - Admin/Cashier: Barcha buyurtmalar
+ */
+export const getOrders = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { id, role } = req.user;
+  let result;
+
+  if (role === 'seller') {
+    result = await orderService.getBySellerId(id);
+  } else {
+    result = await orderService.getAll();
+  }
+
+  res.status(200).json(new ApiResponse(200, result, "Buyurtmalar ro'yxati"));
 });
 
-// 2.5. GET ORDER BY ID (Tahrir uchun)
+/**
+ * 3. GET ORDER BY ID
+ * Bitta buyurtma haqida to'liq ma'lumot
+ */
 export const getOrderById = asyncHandler(async (req: Request, res: Response) => {
   const orderId = Number(req.params.id);
   const result = await orderService.getById(orderId);
+  
   res.status(200).json(new ApiResponse(200, result, "Buyurtma ma'lumotlari"));
 });
 
-// 3. UPDATE STATUS (Confirm/Reject - Admin qiladi)
-export const updateOrderStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const orderId = Number(req.params.id);
-  const adminId = req.user.id; // Token egasi (Admin)
-
-  const result = await orderService.updateStatus(orderId, adminId, req.body);
-
-  res.status(200).json(new ApiResponse(200, result, `Buyurtma holati o'zgartirildi: ${req.body.status}`));
-});
-
-// 4. UPDATE ORDER (Tahrir qilish)
+/**
+ * 4. UPDATE ORDER (EDIT)
+ * Draft holatidagi buyurtmani tahrirlash
+ */
 export const updateOrder = asyncHandler(async (req: AuthRequest, res: Response) => {
   const orderId = Number(req.params.id);
   const userId = req.user.id;
   const userRole = req.user.role;
 
+  // Servisga rolini ham beramiz, u tekshiradi (Seller begona orderni o'zgartira olmasligi uchun)
   const result = await orderService.update(orderId, userId, userRole, req.body);
-  res.status(200).json(new ApiResponse(200, result, "Buyurtma tahrir qilindi"));
+  
+  res.status(200).json(new ApiResponse(200, result, "Buyurtma yangilandi"));
 });
 
-// 5. MARK AS PRINTED
+/**
+ * 5. UPDATE STATUS
+ * Faqat Admin/Cashier (Confirm, Cancel, Completed)
+ */
+export const updateOrderStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const orderId = Number(req.params.id);
+  const adminId = req.user.id;
+
+  const result = await orderService.updateStatus(orderId, adminId, req.body);
+  
+  res.status(200).json(new ApiResponse(200, result, `Buyurtma statusi o'zgardi: ${req.body.status}`));
+});
+
+/**
+ * 6. MARK AS PRINTED
+ * Chek chiqarilganda belgilanadi
+ */
 export const markAsPrinted = asyncHandler(async (req: Request, res: Response) => {
   const orderId = Number(req.params.id);
   const result = await orderService.markAsPrinted(orderId);
-  res.status(200).json(new ApiResponse(200, result, "Buyurtma cheki chiqarildi"));
+  
+  res.status(200).json(new ApiResponse(200, result, "Chek chiqarildi deb belgilandi"));
 });

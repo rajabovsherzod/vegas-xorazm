@@ -23,4 +23,7 @@ router.use("/logs", logsRoutes);
 router.use("/stock-history", stockHistoryRoutes);
 router.use("/qr-test", qrTestRoutes);
 
+router.use("/stock-history", stockHistoryRoutes);
+router.use("/qr-test", qrTestRoutes);
+
 export default router;

@@ -3,19 +3,25 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ArrowLeft, AlertCircle } from "lucide-react";
+
+// Services & Types
 import { orderService } from "@/lib/services/order.service";
 import { productService } from "@/lib/services/product.service";
 import type { Product } from "@/types/api";
-import { toast } from "sonner";
+
+// UI Components
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, AlertCircle } from "lucide-react";
-import { ProductList } from "@/components/cashier/product-list";
-// OrderCartFloating va CartItem interfeysini import qilamiz
-import { OrderCartFloating, CartItem } from "@/components/cashier/order-cart"; 
 
-export default function EditOrderPage() {
+// 🔥 Cashier papkasidagi tayyor komponentlarni ishlatamiz (ular universal)
+import { ProductList } from "@/components/cashier/product-list";
+import { OrderCartFloating, CartItem } from "@/components/cashier/order-cart"; 
+// Eslatma: Sizdagi fayl nomi "order-cart.tsx" yoki "order-cart-floating.tsx" ekanligini tekshiring
+
+export default function SellerEditOrderPage() {
   const router = useRouter();
   const params = useParams();
   const queryClient = useQueryClient();
@@ -34,7 +40,6 @@ export default function EditOrderPage() {
     queryKey: ["order", orderId],
     queryFn: () => orderService.getById(orderId),
     enabled: !!orderId && orderId > 0,
-    // 🔥 MUHIM: Sahifaga kirganda har doim yangi ma'lumot olish (Stale Cache oldini olish)
     refetchOnMount: true, 
   });
 
@@ -46,6 +51,7 @@ export default function EditOrderPage() {
   const products = useMemo(() => {
     if (!productsResponse) return [];
     if (Array.isArray(productsResponse)) return productsResponse;
+    // Backenddan keladigan formatga qarab moslash
     if ((productsResponse as any).products) return (productsResponse as any).products;
     if ((productsResponse as any).data) {
       return Array.isArray((productsResponse as any).data) 
@@ -59,12 +65,13 @@ export default function EditOrderPage() {
   useEffect(() => {
     if (!order || products.length === 0 || !order.items) return;
     
-    // Agar allaqachon yuklangan bo'lsa va ID o'zgarmagan bo'lsa, qaytish
+    // Qayta yuklashni oldini olish
     if (loadedOrderId === order.id) return;
     
+    // Status tekshiruvi
     if (order.status !== "draft") {
       toast.error("Faqat kutilayotgan buyurtmalarni tahrir qilish mumkin");
-      router.push("/cashier/orders");
+      router.push("/seller/orders"); // 👈 O'ZGARISH: seller/orders
       return;
     }
 
@@ -82,8 +89,7 @@ export default function EditOrderPage() {
         return { 
           product, 
           quantity: qty,
-          // 🔥 MUHIM: Yuklangan paytdagi asl miqdorni saqlaymiz.
-          // Bu keyinchalik limitni (stock + originalQuantity) hisoblash uchun kerak.
+          // Limitni to'g'ri hisoblash uchun eski miqdorni saqlaymiz
           originalQuantity: qty 
         };
       })
@@ -117,22 +123,17 @@ export default function EditOrderPage() {
     onSuccess: async () => {
       toast.success("Muvaffaqiyatli saqlandi!");
       
-      // 1. Asosiy ro'yxatni yangilash
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
-
-      // 🔥 2. HAL QILUVCHI QISM: Bu buyurtma keshini BUTUNLAY O'CHIRISH
-      // Shunda keyingi safar kirganda eski ma'lumot ko'rinmaydi, yangisini yuklaydi
-      queryClient.removeQueries({ queryKey: ["order", orderId] });
+      queryClient.removeQueries({ queryKey: ["order", orderId] }); // Keshni tozalash
 
       setLoadedOrderId(null);
-      router.push("/cashier/orders");
+      router.push("/seller/completed"); 
     },
     onError: (error: any) => toast.error(error?.message || "Xatolik"),
   });
 
   // --- HANDLERS ---
   
-  // Mahsulot qo'shish (Plus)
   const addToCart = (product: Product) => {
     setCart(prev => {
       const exists = prev.find(i => i.product.id === product.id);
@@ -143,7 +144,6 @@ export default function EditOrderPage() {
     });
   };
 
-  // Mahsulot kamaytirish (Minus)
   const decreaseFromCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id);
@@ -155,22 +155,19 @@ export default function EditOrderPage() {
     });
   };
 
-  // Butunlay o'chirish (Trash)
   const removeFromCart = (id: number) => {
     setCart(prev => prev.filter(i => i.product.id !== id));
   };
 
-  // Input orqali yangilash
   const updateQuantity = (id: number, qty: number) => {
     if (qty < 0) return;
     setCart(prev => prev.map(i => i.product.id === id ? {...i, quantity: qty} : i));
   };
   
-  // Zaxira tekshiruvi (Save bosilganda tekshirish uchun)
+  // Zaxira tekshiruvi (Save bosilganda)
   const getStockError = (item: CartItem): string | null => {
      // Limit = Hozirgi ombor + Buyurtma ichidagi eski son
      const limit = Number(item.product.stock) + (item.originalQuantity || 0);
-     
      if(item.quantity > limit) {
        return `Omborda faqat ${limit} ta bor`;
      }
@@ -199,15 +196,15 @@ export default function EditOrderPage() {
     );
   }, [products, searchQuery]);
 
-
   // --- RENDER ---
-  if (orderLoading || productsLoading) return <Skeleton className="h-full" />;
+  if (orderLoading || productsLoading) return <div className="p-6"><Skeleton className="h-[500px] w-full" /></div>;
+  
   if (orderError || !order) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <AlertCircle className="w-16 h-16 text-rose-500" />
         <h2 className="text-2xl font-bold">Buyurtma topilmadi</h2>
-        <Button onClick={() => router.push("/cashier/orders")}>
+        <Button onClick={() => router.push("/seller/orders")}> {/* 👈 O'ZGARISH */}
           <ArrowLeft className="w-4 h-4 mr-2" /> Orqaga
         </Button>
       </div>
@@ -220,12 +217,13 @@ export default function EditOrderPage() {
         title={`Buyurtma #${orderId} ni tahrir qilish`}
         description={`${cart.length} xil mahsulot savatda`}
       >
-        <Button variant="outline" size="sm" onClick={() => router.push("/cashier/orders")}>
+        <Button variant="outline" size="sm" onClick={() => router.push("/seller/pos")}> {/* 👈 O'ZGARISH */}
           <ArrowLeft className="w-4 h-4 mr-2" /> Bekor qilish
         </Button>
       </PageHeader>
 
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 px-4">
+        {/* Cashier komponentlarini Sellerda ishlatish */}
         <ProductList
           products={filteredProducts}
           searchQuery={searchQuery}

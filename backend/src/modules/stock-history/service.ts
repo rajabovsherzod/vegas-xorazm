@@ -44,9 +44,3 @@ export const stockHistoryService = {
     };
   }
 };
-
-
-
-
-
-

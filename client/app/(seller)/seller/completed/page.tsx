@@ -1,185 +1,199 @@
 "use client";
 
-import { useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { orderService, Order } from "@/lib/services/order.service";
-import { useSocket } from "@/hooks/use-socket";
-import { format } from "date-fns";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import {
-  Clock,
-  CheckCircle,
-  XCircle,
-  Package,
-  CreditCard,
-  Banknote,
-  Building2,
-  Receipt,
-  Printer,
-  FileText
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Clock, CheckCircle2, RefreshCw } from "lucide-react";
+
+// Services & Hooks
+import { orderService } from "@/lib/services/order.service";
+import { useSocket } from "@/hooks/use-socket";
+import type { Order } from "@/types/api";
+
+// Components
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/layout/page-header";
+import { DataTable } from "@/components/ui/data-table";
+import { TableSkeleton } from "@/components/ui/table-skeleton";
+import { PageHeader } from "@/components/layout/page-header"; // 🔥 Siz so'ragan Header
+import { Button } from "@/components/ui/button";
+import { getColumns } from "./columns";
 
-const statusMap: Record<string, { label: string; className: string; icon: any }> = {
-  draft: { label: "Kutilmoqda", className: "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400", icon: Clock },
-  completed: { label: "Yakunlandi", className: "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400", icon: CheckCircle },
-  cancelled: { label: "Bekor qilindi", className: "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:text-rose-400", icon: XCircle },
-};
+type TabType = "pending" | "completed";
 
-const paymentMethodMap: Record<string, { label: string; icon: any }> = {
-  cash: { label: "Naqd", icon: Banknote },
-  card: { label: "Karta", icon: CreditCard },
-  transfer: { label: "O'tkazma", icon: Building2 },
-  debt: { label: "Nasiya", icon: Receipt },
-};
-
-export default function SellerCompletedPage() {
+export default function SellerOrdersPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
+  const socket = useSocket();
+  const [activeTab, setActiveTab] = useState<TabType>("pending");
 
-  // Socket - real-time yangilanishlar
-  const handleOrderStatusChange = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["seller-orders"] });
-  }, [queryClient]);
-
-  useSocket({
-    onOrderStatusChange: handleOrderStatusChange,
-  });
-
-  // Buyurtmalar (Seller faqat o'zinikini ko'radi - backend filter qiladi)
-  const { data: orders = [], isLoading } = useQuery({
-    queryKey: ["seller-orders"],
+  // 1. DATA FETCHING
+  const { data: orders = [], isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ["orders"], 
     queryFn: () => orderService.getAll(),
   });
 
-  // Faqat yakunlangan va bekor qilinganlar
-  const completedOrders = orders.filter((order: Order) => order.status !== "draft");
+  // 2. REAL-TIME UPDATES
+  useEffect(() => {
+    if (!socket) return;
 
-  const OrderCard = ({ order }: { order: Order }) => {
-    const status = statusMap[order.status] || statusMap.draft;
-    const StatusIcon = status.icon;
-    const payment = paymentMethodMap[order.paymentMethod] || paymentMethodMap.cash;
-    const PaymentIcon = payment.icon;
+    const handleRefetch = (data: any) => {
+      console.log("🔄 Socket update received:", data); 
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    };
 
-    return (
-      <div
-        className={cn(
-          "rounded-xl border bg-white dark:bg-[#132326] p-4 transition-all shadow-md",
-          order.status === "completed"
-            ? "border-emerald-200 dark:border-emerald-900/30"
-            : "border-gray-200 dark:border-white/10"
-        )}
+    socket.on("new_order", handleRefetch);
+    socket.on("order_updated", handleRefetch);
+    socket.on("order_status_change", handleRefetch);
+    socket.on("stock_update", handleRefetch);
+
+    return () => {
+      socket.off("new_order");
+      socket.off("order_updated");
+      socket.off("order_status_change");
+      socket.off("stock_update");
+    };
+  }, [socket, queryClient]);
+
+  // 3. FILTERING
+  const pendingOrders = useMemo(() => 
+    orders.filter((order) => order.status === "draft"), 
+  [orders]);
+  
+  const completedOrders = useMemo(() => 
+    orders.filter((order) => order.status !== "draft"), 
+  [orders]);
+
+  const currentOrders = activeTab === "pending" ? pendingOrders : completedOrders;
+
+  // 4. HANDLERS
+  const handleEdit = (order: Order) => {
+    if (order.status === 'draft') {
+      router.push(`/seller/orders/edit/${order.id}`);
+    } else {
+      toast.error("Faqat kutilayotgan buyurtmalarni tahrirlash mumkin");
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    await refetch();
+    toast.success("Ma'lumotlar yangilandi");
+  };
+
+  const columns = useMemo(() => getColumns({
+    onEdit: handleEdit,
+  }), []);
+
+  return (
+    <div className="space-y-6 w-full pb-20">
+      {/* 🔥 YANGILANGAN PAGE HEADER */}
+      <PageHeader
+        title="Buyurtmalar Tarixi"
+        description="Siz yaratgan barcha buyurtmalar ro'yxati va holati"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div
-              className={cn(
-                "h-12 w-12 rounded-xl flex items-center justify-center",
-                order.status === "completed"
-                  ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
-                  : order.status === "cancelled"
-                    ? "bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400"
-                    : "bg-gray-100 dark:bg-white/5 text-muted-foreground"
-              )}
-            >
-              <Package className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-bold text-[#212B36] dark:text-white">
-                  #{order.id}
-                </h4>
-                <Badge variant="outline" className={status.className}>
-                  <StatusIcon className="w-3 h-3 mr-1" />
-                  {status.label}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {format(new Date(order.createdAt), "dd.MM.yyyy HH:mm")}
-                </span>
-                <span className="flex items-center gap-1">
-                  <PaymentIcon className="w-3 h-3" />
-                  {payment.label}
-                </span>
-              </div>
-            </div>
-          </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleManualRefresh}
+          disabled={isLoading || isRefetching}
+          className="transition-all active:scale-95"
+        >
+          <RefreshCw className={cn("w-4 h-4 mr-2", isRefetching && "animate-spin")} />
+          {isRefetching ? "Yangilanmoqda..." : "Yangilash"}
+        </Button>
+      </PageHeader>
 
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-xl font-extrabold text-[#212B36] dark:text-white">
-                {new Intl.NumberFormat("uz-UZ").format(Number(order.finalAmount))}
-                <span className="text-sm font-normal text-muted-foreground ml-1">UZS</span>
-              </p>
-              {order.customerName && (
-                <p className="text-sm text-muted-foreground">{order.customerName}</p>
-              )}
-            </div>
-
-            {order.status === "completed" && (
-              <Button variant="outline" size="sm">
-                <Printer className="w-4 h-4 mr-1" />
-                Chek
-              </Button>
-            )}
+      <div className="flex flex-col space-y-6">
+        {/* TABS (Chiroyli dizayn) */}
+        <div className="w-full overflow-x-auto pb-2 scrollbar-hide">
+          <div className="flex p-1 bg-gray-100 dark:bg-white/5 rounded-xl min-w-max md:min-w-0 md:w-fit">
+            <TabButton 
+              active={activeTab === "pending"} 
+              onClick={() => setActiveTab("pending")}
+              label="Kutilayotgan"
+              count={pendingOrders.length}
+              badgeColor="bg-amber-500 hover:bg-amber-600 text-white"
+            />
+            <TabButton 
+              active={activeTab === "completed"} 
+              onClick={() => setActiveTab("completed")}
+              label="Yakunlangan"
+              count={completedOrders.length}
+              badgeColor="bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-300"
+            />
           </div>
         </div>
 
-        {/* Mahsulotlar */}
-        {order.items && order.items.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-white/10">
-            <div className="flex flex-wrap gap-2">
-              {order.items.slice(0, 3).map((item: any, index: number) => (
-                <span
-                  key={index}
-                  className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-white/5 text-muted-foreground"
-                >
-                  {item.product?.name || "Mahsulot"} x{item.quantity}
-                </span>
-              ))}
-              {order.items.length > 3 && (
-                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-white/5 text-muted-foreground">
-                  +{order.items.length - 3} ta
-                </span>
-              )}
-            </div>
+        {/* TABLE CONTENT */}
+        {isLoading ? (
+          <TableSkeleton columnCount={6} rowCount={8} />
+        ) : currentOrders.length === 0 ? (
+          <EmptyState type={activeTab} />
+        ) : (
+          <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] overflow-hidden shadow-sm">
+            <DataTable columns={columns} data={currentOrders} />
           </div>
         )}
       </div>
-    );
-  };
-
-  return (
-    <div className="p-4 md:p-6 lg:p-8 w-full max-w-7xl mx-auto space-y-6">
-      <PageHeader
-        title="Yakunlangan Buyurtmalar"
-        description="Tasdiqlangan va bekor qilingan buyurtmalar tarixi"
-      />
-
-      {isLoading ? (
-        <div className="space-y-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-gray-100 dark:bg-white/5 animate-pulse" />
-          ))}
-        </div>
-      ) : completedOrders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-dashed border-gray-200 dark:border-white/10 text-muted-foreground">
-          <FileText className="w-12 h-12 mb-3 opacity-50" />
-          <p className="text-lg font-medium">Hozircha buyurtma yo'q</p>
-          <p className="text-sm">Yangi buyurtma yaratish uchun Kassaga o'ting</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {completedOrders.map((order: Order) => (
-            <OrderCard key={order.id} order={order} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 
+// --- SUB COMPONENTS ---
 
+function TabButton({ 
+  active, 
+  onClick, 
+  label, 
+  count, 
+  badgeColor 
+}: { 
+  active: boolean; 
+  onClick: () => void; 
+  label: string; 
+  count: number; 
+  badgeColor: string; 
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative px-4 md:px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap flex items-center gap-2",
+        active
+          ? "bg-white dark:bg-[#132326] text-[#212B36] dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+          : "text-muted-foreground hover:text-[#212B36] dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-white/5"
+      )}
+    >
+      {label}
+      {count > 0 && (
+        <Badge className={cn("border-0 px-2 h-5 min-w-[20px] flex items-center justify-center transition-colors font-bold", badgeColor)}>
+          {count}
+        </Badge>
+      )}
+    </button>
+  );
+}
+
+function EmptyState({ type }: { type: TabType }) {
+  const isPending = type === "pending";
+  return (
+    <div className="flex flex-col items-center justify-center py-24 px-4 text-center border-2 border-dashed border-gray-200 dark:border-white/10 rounded-2xl bg-gray-50/50 dark:bg-white/[0.02]">
+      <div className="h-24 w-24 rounded-3xl bg-white dark:bg-white/5 shadow-sm border border-gray-100 dark:border-white/5 flex items-center justify-center mb-6">
+        {isPending ? (
+          <Clock className="w-12 h-12 text-amber-500/80" />
+        ) : (
+          <CheckCircle2 className="w-12 h-12 text-emerald-500/80" />
+        )}
+      </div>
+      <h3 className="text-xl font-bold text-[#212B36] dark:text-white mb-2">
+        {isPending ? "Kutilayotgan buyurtmalar yo'q" : "Yakunlangan buyurtmalar yo'q"}
+      </h3>
+      <p className="text-sm text-muted-foreground max-w-[300px] mx-auto leading-relaxed">
+        {isPending
+          ? "Yangi buyurtma yaratganingizda, ular tasdiqlanishini kutish jarayonida shu yerda paydo bo'ladi."
+          : "Tarixda yopilgan, tasdiqlangan yoki bekor qilingan buyurtmalar topilmadi."}
+      </p>
+    </div>
+  );
+}

@@ -31,7 +31,6 @@ export const deleteProduct = asyncHandler(async (req: Request, res: Response) =>
 // 5. ADD STOCK
 export const addStock = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { quantity, newPrice } = req.body;
-  const adminId = req.user.id;
-  const result = await productService.addStock(Number(req.params.id), Number(quantity), newPrice ? Number(newPrice) : undefined, adminId);
+  const result = await productService.addStock(Number(req.params.id), Number(quantity), newPrice ? Number(newPrice) : undefined);
   res.status(200).json(new ApiResponse(200, result, "Mahsulot kirim qilindi"));
 });

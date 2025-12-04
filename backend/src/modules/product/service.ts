@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { products, stockHistory } from "@/db/schema";
+import { products } from "@/db/schema";
 import { eq, desc, ilike, or, sql, SQL, and } from "drizzle-orm";
 import ApiError from "@/utils/ApiError";
 import logger from "@/utils/logger";
@@ -132,51 +132,39 @@ export const productService = {
   },
 
   // 5. ADD STOCK (Kirim qilish)
-  addStock: async (id: number, quantity: number, newPrice?: number, adminId?: number) => {
-    return await db.transaction(async (tx) => {
-      const product = await tx.query.products.findFirst({
-        where: eq(products.id, id)
-      });
-
-      if (!product) throw new ApiError(404, "Mahsulot topilmadi");
-
-      const currentStock = Number(product.stock);
-      const newStock = currentStock + quantity;
-
-      const updateData: any = {
-        stock: String(newStock),
-        updatedAt: new Date(),
-      };
-
-      // Agar yangi narx berilgan bo'lsa, narxni ham yangilaymiz
-      if (newPrice !== undefined && newPrice > 0) {
-        updateData.price = String(newPrice);
-      }
-
-      const [updatedProduct] = await tx
-        .update(products)
-        .set(updateData)
-        .where(eq(products.id, id))
-        .returning();
-
-      // History yozish
-      await tx.insert(stockHistory).values({
-        productId: id,
-        quantity: String(quantity),
-        oldStock: String(currentStock),
-        newStock: String(newStock),
-        newPrice: newPrice ? String(newPrice) : null,
-        addedBy: adminId || null,
-      });
-
-      logger.info(`Mahsulot kirim qilindi. ID: ${id}, +${quantity}`);
-
-      // Socket notification
-      try {
-        getIO().emit("product_update", updatedProduct);
-      } catch (e) { console.error("Socket error:", e); }
-
-      return updatedProduct;
+  addStock: async (id: number, quantity: number, newPrice?: number) => {
+    const product = await db.query.products.findFirst({
+      where: eq(products.id, id)
     });
+
+    if (!product) throw new ApiError(404, "Mahsulot topilmadi");
+
+    const currentStock = Number(product.stock);
+    const newStock = currentStock + quantity;
+
+    const updateData: any = {
+      stock: String(newStock),
+      updatedAt: new Date(),
+    };
+
+    // Agar yangi narx berilgan bo'lsa, narxni ham yangilaymiz
+    if (newPrice !== undefined && newPrice > 0) {
+      updateData.price = String(newPrice);
+    }
+
+    const [updatedProduct] = await db
+      .update(products)
+      .set(updateData)
+      .where(eq(products.id, id))
+      .returning();
+
+    logger.info(`Mahsulot kirim qilindi. ID: ${id}, +${quantity}`);
+
+    // Socket notification
+    try {
+      getIO().emit("product_update", updatedProduct);
+    } catch (e) { console.error("Socket error:", e); }
+
+    return updatedProduct;
   }
 };

@@ -68,3 +68,19 @@ export default async function UnauthorizedPage() {
   );
 }
 
+      <Footer />
+    </div>
+  );
+}
+
+
+      <Footer />
+    </div>
+  );
+}
+
+      <Footer />
+    </div>
+  );
+}
+
