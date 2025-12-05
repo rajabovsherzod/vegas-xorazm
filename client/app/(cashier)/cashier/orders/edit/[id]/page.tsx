@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, AlertCircle } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { orderService } from "@/lib/services/order.service";
 import { productService } from "@/lib/services/product.service";
@@ -15,7 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ProductList } from "@/components/cashier/product-list";
-import { OrderCartFloating, CartItem } from "@/components/cashier/order-cart";
+// Asosiy CartItem ni import qilamiz, lekin nomini o'zgartiramiz
+import { OrderCartFloating, CartItem as BaseCartItem } from "@/components/cashier/order-cart";
+
+// 🔥 FIX: CartItem tipini shu yerda kengaytiramiz (Manual Discount uchun)
+interface CartItem extends BaseCartItem {
+  manualDiscountValue?: number;
+  manualDiscountType?: 'percent' | 'fixed';
+}
 
 export default function EditOrderPage() {
   const router = useRouter();
@@ -23,7 +30,7 @@ export default function EditOrderPage() {
   const queryClient = useQueryClient();
   const orderId = Number(params.id);
 
-  // States
+  // States (Endi yangi CartItem tipini ishlatadi)
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "debt">("cash");
@@ -61,7 +68,7 @@ export default function EditOrderPage() {
     return [];
   }, [productsResponse]);
 
-  // 🔥🔥🔥 DATA SYNC (ENG MUHIM QISM) 🔥🔥🔥
+  // 🔥 DATA SYNC & SNAPSHOT RECOVERY
   useEffect(() => {
     if (!order || products.length === 0 || !order.items) return;
     if (loadedOrderId === order.id) return;
@@ -76,7 +83,6 @@ export default function EditOrderPage() {
       ? (order.paymentMethod as any) 
       : "cash";
 
-    // Orderning o'zidagi kursni olamiz
     const orderRate = Number(order.exchangeRate) || 1;
 
     const loadedCart: CartItem[] = (order.items || [])
@@ -86,13 +92,12 @@ export default function EditOrderPage() {
         
         const qty = Number(item.quantity);
         
-        // 🔥 MUHIM: BAZADAN KELGAN NARXLAR (UZS da)
-        let soldPriceUZS = Number(item.price);          // Masalan: 143,500 so'm
-        let originalPriceUZS = Number(item.originalPrice); // Masalan: 143,500 so'm
+        let soldPriceUZS = Number(item.price);          
+        let originalPriceUZS = Number(item.originalPrice); 
 
-        // 🔥 AGAR PRODUCT USD BO'LSA, NARXNI QAYTARAMIZ (UZS -> USD)
-        // Chunki CartItem komponenti agar currency=USD bo'lsa, o'zi ko'paytirib hisoblaydi.
-        // Biz unga "Xom" narxni berishimiz kerak.
+        // Eski orderlarda 0 bo'lsa, soldPrice ni olamiz
+        if (originalPriceUZS === 0) originalPriceUZS = soldPriceUZS;
+
         let displaySoldPrice = soldPriceUZS;
         let displayOriginalPrice = originalPriceUZS;
 
@@ -101,16 +106,15 @@ export default function EditOrderPage() {
             displayOriginalPrice = originalPriceUZS / orderRate;
         }
 
-        // Product Snapshot yaratamiz
+        // 🔥 BETON FIX: Original narxni majburlab yozamiz
         let productForCart = { 
           ...originalProduct,
-          price: String(displayOriginalPrice), // Asl narxni (valyutada) tiklaymiz
+          price: String(displayOriginalPrice), 
+          originalPrice: String(displayOriginalPrice), 
           discountPrice: null as string | null 
         };
         
-        // Agar sotilgan narx arzon bo'lsa -> Chegirma bor
-        // (Kichik farqlarni yo'qotish uchun toFixed tekshiruvi yaxshi bo'ladi)
-        if (displaySoldPrice < displayOriginalPrice) {
+        if ((displayOriginalPrice - displaySoldPrice) > 0.1) {
             productForCart.discountPrice = String(displaySoldPrice);
         }
 
@@ -118,6 +122,7 @@ export default function EditOrderPage() {
           product: productForCart, 
           quantity: qty,
           originalQuantity: qty,
+          // 🔥 Endi bu xato bermaydi, chunki tipni kengaytirdik
           manualDiscountValue: Number(item.manualDiscountValue || 0),
           manualDiscountType: item.manualDiscountType || 'fixed'
         };
@@ -129,7 +134,6 @@ export default function EditOrderPage() {
     setPaymentMethod(method);
     setExchangeRate(String(order.exchangeRate || "12800"));
     
-    // Global Discount
     setDiscountAmount(Number(order.discountAmount || 0));
     setDiscountValue(Number(order.discountValue || 0));
     setDiscountType((order.discountType as any) || 'fixed');
@@ -151,7 +155,6 @@ export default function EditOrderPage() {
   
       const payload = {
         items: validItems.map((item) => {
-          // Chegirmali narx
           const sellingPrice = Number(item.product.discountPrice) > 0 
                 ? Number(item.product.discountPrice) 
                 : undefined;
@@ -160,8 +163,9 @@ export default function EditOrderPage() {
             productId: item.product.id,
             quantity: String(item.quantity),
             price: sellingPrice,
-            // Manual discount ma'lumotlarini (agar state da bo'lsa) ham qo'shish kerak
-            // Hozircha oddiy price yuboramiz
+            // 🔥 XATO KETDI: endi bemalol ishlatamiz
+            manualDiscountValue: item.manualDiscountValue,
+            manualDiscountType: item.manualDiscountType,
           };
         }),
         customerName: customerName || undefined,
@@ -186,7 +190,7 @@ export default function EditOrderPage() {
     onError: (error: any) => toast.error(error?.message || "Xatolik"),
   });
 
-  // Cart Handlers (o'zgarishsiz)...
+  // Cart Handlers
   const addToCart = (product: Product) => {
     setCart(prev => {
       const exists = prev.find(i => i.product.id === product.id);
@@ -196,6 +200,7 @@ export default function EditOrderPage() {
       return [...prev, { product, quantity: 1 }];
     });
   };
+  
   const decreaseFromCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id);
@@ -204,15 +209,16 @@ export default function EditOrderPage() {
       return prev.map(i => i.product.id === product.id ? {...i, quantity: i.quantity - 1} : i);
     });
   };
+  
   const removeFromCart = (id: number) => {
     setCart(prev => prev.filter(i => i.product.id !== id));
   };
+  
   const updateQuantity = (id: number, qty: number) => {
     if (qty < 0) return;
     setCart(prev => prev.map(i => i.product.id === id ? {...i, quantity: qty} : i));
   };
   
-  // Item Narxini O'zgartirish
   const handleUpdatePrice = (id: number, newPrice: number) => {
     setCart((prev) => prev.map((item) => {
         if (item.product.id === id) {
@@ -225,30 +231,54 @@ export default function EditOrderPage() {
     }));
   };
 
-  const getStockError = (item: CartItem): string | null => {
+  const getStockError = (item: BaseCartItem): string | null => {
      const limit = Number(item.product.stock) + (item.originalQuantity || 0);
      if(item.quantity > limit) return `Omborda faqat ${limit} ta bor`;
      return null;
   };
 
-  // Calculations
-  const { totalAmount, totalUSD } = useMemo(() => {
-    let usd = 0, uzs = 0;
-    cart.forEach((item) => {
-      const discountP = parseFloat(item.product.discountPrice || "0");
-      const regularP = parseFloat(item.product.price || "0");
-      
-      // 🔥 MUHIM: Har doim discountPrice > 0 bo'lsa o'shani olamiz
-      const finalPrice = (discountP > 0) ? discountP : regularP;
-      
-      const qty = item.quantity;
-      if (item.product.currency === "USD") usd += finalPrice * qty;
-      else uzs += finalPrice * qty;
-    });
+  // 🔥 CALCULATIONS
+  const { totalAmount, totalUSD, originalTotalAmount } = useMemo(() => {
+    let usd = 0; 
+    let uzs = 0; 
+    let originalUzs = 0; 
+
     const rate = parseFloat(exchangeRate) || 1;
-    return { totalAmount: uzs + usd * rate, totalUSD: usd };
+
+    cart.forEach((item) => {
+      const qty = item.quantity;
+      const product = item.product;
+
+      const discountP = parseFloat(product.discountPrice || "0");
+      const regularP = parseFloat(product.price || "0");
+      const finalPrice = (discountP > 0) ? discountP : regularP;
+
+      if (product.currency === "USD") {
+        usd += finalPrice * qty;
+      } else {
+        uzs += finalPrice * qty;
+      }
+
+      let itemOriginal = parseFloat(product.originalPrice as string || "0");
+      let itemBase = parseFloat(product.price as string || "0");
+
+      if (product.currency === 'USD') {
+        itemOriginal = itemOriginal * rate;
+        itemBase = itemBase * rate;
+      }
+
+      const effectiveOriginal = itemOriginal > 0 ? itemOriginal : itemBase;
+      originalUzs += (effectiveOriginal * qty);
+    });
+
+    return { 
+        totalAmount: uzs + (usd * rate), 
+        totalUSD: usd,
+        originalTotalAmount: originalUzs 
+    };
   }, [cart, exchangeRate]);
 
+  // Filtering
   const filteredProducts = useMemo(() => {
     if (!searchQuery) return products;
     const q = searchQuery.toLowerCase();
@@ -290,7 +320,9 @@ export default function EditOrderPage() {
         customerName={customerName}
         paymentMethod={paymentMethod}
         exchangeRate={exchangeRate}
-        totalAmount={totalAmount}
+        
+        totalAmount={totalAmount}            
+        originalTotalAmount={originalTotalAmount}
         totalUSD={totalUSD}
         
         onCustomerNameChange={setCustomerName}
@@ -307,7 +339,7 @@ export default function EditOrderPage() {
         discountType={discountType}
         onDiscountApply={handleDiscountApply}
 
-        canDiscount={true} // Cashier
+        canDiscount={true}
         getStockError={getStockError}
         onSave={() => updateMutation.mutate()}
         isSaving={updateMutation.isPending}

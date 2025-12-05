@@ -7,8 +7,6 @@ export const orderTypeEnum = pgEnum('order_type', ['retail', 'wholesale']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'card', 'transfer', 'debt']);
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'cashier', 'seller', 'developer']);
 export const errorLogLevelEnum = pgEnum('error_log_level', ['error', 'warning', 'info']);
-
-// 🔥 YANGI ENUM: Chegirma turi
 export const discountTypeEnum = pgEnum('discount_type', ['percent', 'fixed']);
 
 // STATUSLAR
@@ -96,9 +94,8 @@ export const products = pgTable('products', {
   barcode: varchar('barcode', { length: 100 }).unique(),
   categoryId: integer('category_id').references(() => categories.id),
   
-  price: decimal('price', { precision: 15, scale: 2 }).notNull(), // Asosiy narx
+  price: decimal('price', { precision: 15, scale: 2 }).notNull(),
   
-  // CHEGIRMA (PROMO)
   discountPrice: decimal('discount_price', { precision: 15, scale: 2 }), 
   discountStart: timestamp('discount_start'), 
   discountEnd: timestamp('discount_end'),     
@@ -120,7 +117,7 @@ export const products = pgTable('products', {
 }));
 
 // ---------------------------
-// 6. NARXLAR TARIXI
+// 6. NARXLAR TARIXI (O'ZGARTIRILDI)
 // ---------------------------
 export const priceHistory = pgTable('price_history', {
   id: serial('id').primaryKey(),
@@ -129,7 +126,9 @@ export const priceHistory = pgTable('price_history', {
   newPrice: decimal('new_price', { precision: 15, scale: 2 }).notNull(),
   currency: currencyEnum('currency').notNull(),
   changedAt: timestamp('changed_at').defaultNow(),
-  changedBy: varchar('changed_by', { length: 100 }),
+  
+  // 🔥 O'ZGARTIRILDI: varchar emas, integer (user ID)
+  changedBy: integer('changed_by').references(() => users.id),
 });
 
 // ---------------------------
@@ -148,7 +147,7 @@ export const stockHistory = pgTable('stock_history', {
 });
 
 // ---------------------------
-// 8. ORDERS (Yangilandi: Beton Chegirma)
+// 8. ORDERS
 // ---------------------------
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
@@ -156,10 +155,9 @@ export const orders = pgTable('orders', {
   totalAmount: decimal('total_amount', { precision: 18, scale: 2 }).notNull(),
   finalAmount: decimal('final_amount', { precision: 18, scale: 2 }).notNull(),
 
-  // 🔥 CHEGIRMA TARIXI (EDIT UCHUN MUHIM)
-  discountAmount: decimal('discount_amount', { precision: 18, scale: 2 }).default('0'), // Natija
-  discountValue: decimal('discount_value', { precision: 18, scale: 2 }).default('0'),   // Kiritilgan raqam (10 yoki 50000)
-  discountType: discountTypeEnum('discount_type').default('fixed'),                     // percent yoki fixed
+  discountAmount: decimal('discount_amount', { precision: 18, scale: 2 }).default('0'),
+  discountValue: decimal('discount_value', { precision: 18, scale: 2 }).default('0'),
+  discountType: discountTypeEnum('discount_type').default('fixed'),
 
   currency: currencyEnum('currency').default('UZS').notNull(),
   exchangeRate: decimal('exchange_rate', { precision: 10, scale: 2 }).default('1'),
@@ -183,7 +181,7 @@ export const orders = pgTable('orders', {
 }));
 
 // ---------------------------
-// 9. ORDER ITEMS (Yangilandi: Manual Discount uchun)
+// 9. ORDER ITEMS
 // ---------------------------
 export const orderItems = pgTable('order_items', {
   id: serial('id').primaryKey(),
@@ -195,7 +193,6 @@ export const orderItems = pgTable('order_items', {
   price: decimal('price', { precision: 15, scale: 2 }).notNull(), 
   originalPrice: decimal('original_price', { precision: 15, scale: 2 }).default('0').notNull(), 
   
-  // 🔥 YANGI: Agar itemga alohida chegirma berilgan bo'lsa
   manualDiscountValue: decimal('manual_discount_value', { precision: 15, scale: 2 }).default('0'),
   manualDiscountType: discountTypeEnum('manual_discount_type').default('fixed'),
 
@@ -242,21 +239,36 @@ export const errorLogs = pgTable('error_logs', {
 });
 
 // ==========================================
-// RELATIONS
+// RELATIONS (TO'LIQ YANGILANDI)
 // ==========================================
 
+// 1. Users
 export const usersRelations = relations(users, ({ many }) => ({
   attendances: many(attendance),
   sales: many(orders, { relationName: 'sellerOrders' }),
   cashierOrders: many(orders, { relationName: 'cashierOrders' }),
   addedStocks: many(stockHistory),
   refundsProcessed: many(refunds),
+  // 🔥 QO'SHILDI: Narx o'zgarishlari
+  priceChanges: many(priceHistory),
 }));
 
+// 2. Attendance
 export const attendanceRelations = relations(attendance, ({ one }) => ({
   user: one(users, { fields: [attendance.userId], references: [users.id] }),
 }));
 
+// 3. Categories (🔥 QO'SHILDI)
+export const categoriesRelations = relations(categories, ({ many }) => ({
+  products: many(products),
+}));
+
+// 4. Partners (🔥 QO'SHILDI)
+export const partnersRelations = relations(partners, ({ many }) => ({
+  orders: many(orders),
+}));
+
+// 5. Products
 export const productsRelations = relations(products, ({ one, many }) => ({
   category: one(categories, { fields: [products.categoryId], references: [categories.id] }),
   priceHistory: many(priceHistory),
@@ -265,11 +277,20 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   refundItems: many(refundItems),
 }));
 
+// 6. Price History (🔥 O'ZGARTIRILDI)
+export const priceHistoryRelations = relations(priceHistory, ({ one }) => ({
+  product: one(products, { fields: [priceHistory.productId], references: [products.id] }),
+  // 🔥 MUHIM: User bilan bog'landi
+  user: one(users, { fields: [priceHistory.changedBy], references: [users.id] }),
+}));
+
+// 7. Stock History
 export const stockHistoryRelations = relations(stockHistory, ({ one }) => ({
   product: one(products, { fields: [stockHistory.productId], references: [products.id] }),
   addedBy: one(users, { fields: [stockHistory.addedBy], references: [users.id] }),
 }));
 
+// 8. Orders
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   partner: one(partners, { fields: [orders.partnerId], references: [partners.id] }),
   items: many(orderItems),
@@ -278,17 +299,20 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   refunds: many(refunds), 
 }));
 
+// 9. Order Items
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
   product: one(products, { fields: [orderItems.productId], references: [products.id] }),
 }));
 
+// 10. Refunds
 export const refundsRelations = relations(refunds, ({ one, many }) => ({
   order: one(orders, { fields: [refunds.orderId], references: [orders.id] }),
   items: many(refundItems),
   refundedBy: one(users, { fields: [refunds.refundedBy], references: [users.id] }),
 }));
 
+// 11. Refund Items
 export const refundItemsRelations = relations(refundItems, ({ one }) => ({
   refund: one(refunds, { fields: [refundItems.refundId], references: [refunds.id] }),
   product: one(products, { fields: [refundItems.productId], references: [products.id] }),
@@ -300,3 +324,5 @@ export type Order = typeof orders.$inferSelect;
 export type StockHistory = typeof stockHistory.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type User = typeof users.$inferSelect;
+// 🔥 QO'SHIB QO'YISH KERAK
+export type PriceHistory = typeof priceHistory.$inferSelect;

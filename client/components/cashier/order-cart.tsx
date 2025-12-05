@@ -25,32 +25,28 @@ export interface CartItem {
   originalQuantity?: number; 
 }
 
-// 🔥 YANGILANGAN INTERFEYS
 interface OrderCartProps {
   cart: CartItem[];
   customerName: string;
   paymentMethod: "cash" | "card" | "transfer" | "debt";
   exchangeRate: string;
-  totalAmount: number;
+  
+  // 🔥 PROPLAR
+  totalAmount: number;         // Sotilish narxi
+  originalTotalAmount: number; // 🔥 ASL NARX (429k)
   totalUSD: number;
   
   onCustomerNameChange: (val: string) => void;
   onPaymentMethodChange: (val: "cash" | "card" | "transfer" | "debt") => void;
   onExchangeRateChange: (val: string) => void;
-  
   onUpdateQuantity: (id: number, qty: number) => void;
   onRemove: (id: number) => void;
-  
   onUpdatePrice: (id: number, price: number) => void; 
   
-  // 🔥 YANGI PROPLAR (PAGE DAN KELADI):
   discountAmount: number; 
-  discountValue: number;            // <-- QO'SHILDI
-  discountType: 'percent' | 'fixed'; // <-- QO'SHILDI
-  onDiscountApply: (amount: number, value: number, type: 'percent' | 'fixed') => void; // Nomini aniqlashtirdik
-  
-  // Eskisini (onDiscountChange) olib tashlasangiz ham bo'ladi, chunki onDiscountApply ishlatyapmiz
-  // onDiscountChange: (val: number) => void; 
+  discountValue: number;            
+  discountType: 'percent' | 'fixed'; 
+  onDiscountApply: (amount: number, value: number, type: 'percent' | 'fixed') => void;
   
   canDiscount?: boolean;
   getStockError: (item: CartItem) => string | null;
@@ -63,8 +59,11 @@ export function OrderCartFloating({
   customerName,
   paymentMethod,
   exchangeRate,
-  totalAmount,
+  
+  totalAmount, 
+  originalTotalAmount, // 🔥 TAYYOR KELADI
   totalUSD,
+  
   onCustomerNameChange,
   onPaymentMethodChange,
   onExchangeRateChange,
@@ -72,11 +71,10 @@ export function OrderCartFloating({
   onRemove,
   onUpdatePrice,      
   
-  // 🔥 YANGI PROPLARNI QABUL QILISH:
   discountAmount,     
-  discountValue,      // <--
-  discountType,       // <--
-  onDiscountApply,    // <--
+  discountValue,      
+  discountType,       
+  onDiscountApply,    
   
   canDiscount = false,
   getStockError,
@@ -86,7 +84,13 @@ export function OrderCartFloating({
   
   const itemsToDisplay = cart; 
   const activeItemCount = cart.filter(i => i.quantity > 0).length;
+
+  // 1. Yakuniy to'lanadigan summa (Kassa chegirmasi ayiriladi)
   const finalTotal = totalAmount - discountAmount;
+
+  // 2. Chegirma bormi?
+  // Asl summa (429k) > To'lanadigan summa (188k)
+  const hasDiscount = (originalTotalAmount - finalTotal) > 10; 
 
   if (cart.length === 0) return null;
 
@@ -174,11 +178,10 @@ export function OrderCartFloating({
                     onPaymentMethodChange={onPaymentMethodChange}
                     onExchangeRateChange={onExchangeRateChange}
                     
-                    // 🔥 YANGI PROPLAR FORMGA UZATILDI
                     discountAmount={discountAmount}
-                    discountValue={discountValue  }
-                    discountType={discountType}     // <--
-                    onDiscountApply={onDiscountApply} // <--
+                    discountValue={discountValue}
+                    discountType={discountType}     
+                    onDiscountApply={onDiscountApply} 
                     
                     subTotal={totalAmount} 
                     canDiscount={canDiscount}
@@ -198,9 +201,10 @@ export function OrderCartFloating({
                    <span className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
                      {formatCurrency(finalTotal, "UZS")}
                    </span>
-                   {discountAmount > 0 && (
+                   {/* 🔥 FAQAT PROP QIYMATINI CHIZIB QO'YAMIZ */}
+                   {hasDiscount && (
                      <span className="text-sm text-muted-foreground line-through decoration-rose-500/50">
-                        {formatCurrency(totalAmount, "UZS")}
+                        {formatCurrency(originalTotalAmount, "UZS")}
                      </span>
                    )}
                 </div>
