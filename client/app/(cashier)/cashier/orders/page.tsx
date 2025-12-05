@@ -8,6 +8,7 @@ import type { Order } from "@/types/api";
 import { useSocket } from "@/hooks/use-socket";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useSession } from "next-auth/react";
 import {
   Clock,
   CheckCircle2,
@@ -165,6 +166,9 @@ export default function AdminOrdersPage() {
       </p>
     </div>
   );
+  const { data: session } = useSession();
+
+  console.log(session);
 
   return (
     <div className="space-y-6 w-full">

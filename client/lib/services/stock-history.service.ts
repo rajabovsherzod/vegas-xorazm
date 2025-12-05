@@ -34,3 +34,4 @@ export const stockHistoryService = {
     return await api.get(`/stock-history?${searchParams.toString()}`);
   }
 };
+
