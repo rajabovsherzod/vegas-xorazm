@@ -36,6 +36,13 @@
       "when": 1764680721484,
       "tag": "0004_worthless_raza",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1764914629231,
+      "tag": "0005_minor_black_widow",
+      "breakpoints": true
     }
   ]
 }

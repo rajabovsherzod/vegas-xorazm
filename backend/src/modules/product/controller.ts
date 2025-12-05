@@ -31,11 +31,16 @@ export const deleteProduct = asyncHandler(async (req: Request, res: Response) =>
 // 5. ADD STOCK (User ID ni jo'natamiz)
 export const addStock = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { quantity, newPrice } = req.body;
+  
+  // Debug uchun log tashlab ko'ring
+  console.log("User ID add Stock:", req.user?.id); 
+
   const result = await productService.addStock(
     Number(req.params.id), 
     Number(quantity), 
     newPrice ? Number(newPrice) : undefined,
-    req.user?.id // <-- Kim qo'shayotgani muhim
+    req.user?.id // <--- Agar protect bo'lmasa, bu undefined bo'ladi
   );
+  
   res.status(200).json(new ApiResponse(200, result, "Mahsulot kirim qilindi"));
 });
