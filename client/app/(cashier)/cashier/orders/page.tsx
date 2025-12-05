@@ -179,7 +179,7 @@ export default function AdminOrdersPage() {
 
       <div className="flex flex-col space-y-6">
         <div className="w-full overflow-x-auto pb-2 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
-          <div className="flex p-1 bg-gray-100 dark:bg-white/5 rounded-xl min-w-max md:min-w-0 md:w-fit">
+        <div className="flex p-1 bg-gray-100 dark:bg-white/5 rounded-xl min-w-max md:min-w-0 md:w-fit">
             <TabButton 
               active={activeTab === "pending"} 
               onClick={() => setActiveTab("pending")} 
@@ -192,7 +192,8 @@ export default function AdminOrdersPage() {
               onClick={() => setActiveTab("unprinted")} 
               label="Chop etilmagan" 
               count={unprintedOrders.length} 
-              color="bg-blue-500" 
+              // 🔥 O'ZGARTIRILDI: bg-blue-500 -> bg-[#00B8D9]
+              color="bg-emerald-600" 
             />
             <TabButton 
               active={activeTab === "printed"} 

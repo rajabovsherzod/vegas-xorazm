@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 
 interface OrderCardProps {
   order: Order;
-  onEdit: (order: Order) => void;
+  onEdit?: (order: Order) => void;
   onView?: (order: Order) => void;
   onDelete?: (order: Order) => void;
 }
@@ -95,64 +95,61 @@ export function OrderCard({ order, onEdit, onView, onDelete }: OrderCardProps) {
           </div>
         </div>
 
-        {/* --- 3. O'NG: Action Button --- */}
-        <div className="pl-3 border-l border-gray-100 dark:border-white/5 ml-1">
-          {/* 🔥 modal={false} -> Scroll bloklanmasligi uchun */}
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-11 w-11 rounded-full bg-gray-50 dark:bg-white/5 text-gray-500 hover:text-[#00B8D9] hover:bg-[#00B8D9]/10 transition-all active:scale-95 border border-transparent hover:border-[#00B8D9]/20"
-              >
-                <MoreHorizontal className="h-6 w-6" />
-              </Button>
-            </DropdownMenuTrigger>
-            
-            <DropdownMenuContent 
-              align="end" 
-              className="w-48 bg-white dark:bg-[#1C2526] border-gray-200 dark:border-white/10 shadow-xl p-1 z-[50]"
-            >
-              {/* KO'RISH */}
-              {onView && (
-                <DropdownMenuItem 
-                  onClick={() => onView(order)} 
-                  className="cursor-pointer py-2.5 px-3 rounded-lg focus:bg-gray-100 dark:focus:bg-[#00B8D9]/10 dark:focus:text-[#00B8D9] font-medium"
+        {/* --- 3. O'NG: Action Button (FAQAT DRAFT BO'LSA CHIQADI) --- */}
+        {isDraft && (
+          <div className="pl-3 border-l border-gray-100 dark:border-white/5 ml-1">
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-11 w-11 rounded-full bg-gray-50 dark:bg-white/5 text-gray-500 hover:text-[#00B8D9] hover:bg-[#00B8D9]/10 transition-all active:scale-95 border border-transparent hover:border-[#00B8D9]/20"
                 >
-                  <Eye className="mr-2 h-4 w-4 opacity-70" /> 
-                  Ko'rish
-                </DropdownMenuItem>
-              )}
-
-              {/* TAHRIRLASH (Faqat Draft bo'lsa) */}
-              {isDraft && (
-                <>
+                  <MoreHorizontal className="h-6 w-6" />
+                </Button>
+              </DropdownMenuTrigger>
+              
+              <DropdownMenuContent 
+                align="end" 
+                className="w-48 bg-white dark:bg-[#1C2526] border-gray-200 dark:border-white/10 shadow-xl p-1 z-[50]"
+              >
+                {/* KO'RISH */}
+                {onView && (
                   <DropdownMenuItem 
-                    onClick={() => onEdit(order)} 
-                    className="cursor-pointer py-2.5 px-3 rounded-lg text-amber-600 dark:text-amber-500 focus:bg-amber-50 dark:focus:bg-amber-500/10 focus:text-amber-700 font-medium"
+                    onClick={() => onView(order)} 
+                    className="cursor-pointer py-2.5 px-3 rounded-lg focus:bg-gray-100 dark:focus:bg-[#00B8D9]/10 dark:focus:text-[#00B8D9] font-medium"
                   >
-                    <Edit className="mr-2 h-4 w-4" /> 
-                    Tahrirlash
+                    <Eye className="mr-2 h-4 w-4 opacity-70" /> 
+                    Ko'rish
                   </DropdownMenuItem>
-                  
-                  {/* O'CHIRISH (Faqat Draft bo'lsa) */}
-                  {onDelete && (
-                    <>
-                      <DropdownMenuSeparator className="bg-gray-100 dark:bg-white/5 my-1" />
-                      <DropdownMenuItem 
-                        onClick={() => onDelete(order)} 
-                        className="cursor-pointer py-2.5 px-3 rounded-lg text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-500/10 focus:text-rose-700 font-medium"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" /> 
-                        Bekor qilish
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                )}
+
+                {/* TAHRIRLASH */}
+                <DropdownMenuItem 
+                  onClick={() => onEdit?.(order)} 
+                  className="cursor-pointer py-2.5 px-3 rounded-lg text-amber-600 dark:text-amber-500 focus:bg-amber-50 dark:focus:bg-amber-500/10 focus:text-amber-700 font-medium"
+                >
+                  <Edit className="mr-2 h-4 w-4" /> 
+                  Tahrirlash
+                </DropdownMenuItem>
+                
+                {/* O'CHIRISH */}
+                {onDelete && (
+                  <>
+                    <DropdownMenuSeparator className="bg-gray-100 dark:bg-white/5 my-1" />
+                    <DropdownMenuItem 
+                      onClick={() => onDelete(order)} 
+                      className="cursor-pointer py-2.5 px-3 rounded-lg text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-500/10 focus:text-rose-700 font-medium"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" /> 
+                      Bekor qilish
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
 
       </div>
     </div>

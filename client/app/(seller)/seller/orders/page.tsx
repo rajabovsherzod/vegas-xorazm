@@ -19,7 +19,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { getColumns } from "./columns";
 
-// 🔥 OrderCard Import (Yo'lini o'zingizga moslang)
+// 🔥 OrderCard (Pathni loyihangizga qarab to'g'rilang)
 import { OrderCard } from "@/components/seller/orders/order-card";
 
 type TabType = "pending" | "completed";
@@ -60,11 +60,11 @@ export default function SellerOrdersPage() {
 
   // 3. FILTERING
   const pendingOrders = useMemo(() => 
-    orders.filter((order) => order.status === "draft"), 
+    orders.filter((order: Order) => order.status === "draft"), 
   [orders]);
   
   const completedOrders = useMemo(() => 
-    orders.filter((order) => order.status !== "draft"), 
+    orders.filter((order: Order) => order.status !== "draft"), 
   [orders]);
 
   const currentOrders = activeTab === "pending" ? pendingOrders : completedOrders;
@@ -73,8 +73,6 @@ export default function SellerOrdersPage() {
   const handleEdit = (order: Order) => {
     if (order.status === 'draft') {
       router.push(`/seller/orders/edit/${order.id}`);
-    } else {
-      toast.error("Faqat kutilayotgan buyurtmalarni tahrirlash mumkin");
     }
   };
 
@@ -83,10 +81,9 @@ export default function SellerOrdersPage() {
     toast.success("Ma'lumotlar yangilandi");
   };
   
-  // O'chirish logikasi (Hozircha shunchaki toast, keyin API ulaysiz)
   const handleDelete = (order: Order) => {
     if(confirm("Buyurtmani bekor qilmoqchimisiz?")) {
-        // API call here...
+        // Bu yerda API call bo'ladi
         toast.info("Buyurtma bekor qilishga yuborildi");
     }
   }
@@ -96,8 +93,6 @@ export default function SellerOrdersPage() {
   }), []);
 
   return (
-    // 🔥 ASOSIY WRAPPER: Ekran bo'yi cho'ziladi
-    // Header (masalan 80px) + Paddinglar hisobiga 140px ayiramiz
     <div className="flex flex-col h-[calc(100vh-140px)] w-full gap-6">
       
       {/* 1. FIXED HEADER */}
@@ -134,20 +129,16 @@ export default function SellerOrdersPage() {
             onClick={() => setActiveTab("completed")}
             label="Yakunlangan"
             count={completedOrders.length}
-            badgeColor="bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-300"
+            // 🔥 RANG O'ZGARTIRILDI: YASHIL
+            badgeColor="bg-emerald-600 text-white"
           />
         </div>
       </div>
 
       {/* 3. SCROLLABLE CONTENT */}
-      {/* flex-1: Qolgan joyni egallaydi
-          overflow-y-auto: Scroll bo'ladi
-          scrollbarni yashirish klasslari
-      */}
       <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] pb-20 pr-1">
         
         {isLoading ? (
-          // Loading Skeletons
           <div className="space-y-3">
              {[1,2,3,4,5].map(i => (
                 <div key={i} className="h-24 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse w-full" />
@@ -166,14 +157,22 @@ export default function SellerOrdersPage() {
 
             {/* TABLET & MOBILE: Card List */}
             <div className="xl:hidden flex flex-col space-y-3">
-              {currentOrders.map((order) => (
-                <OrderCard 
-                  key={order.id} 
-                  order={order} 
-                  onEdit={handleEdit} 
-                  onDelete={handleDelete}
-                />
-              ))}
+              {currentOrders.map((order) => {
+                // 🔥 LOGIKA: Faqat Draft bo'lsa actionlar chiqadi
+                const isDraft = order.status === 'draft';
+
+                return (
+                  <OrderCard 
+                    key={order.id} 
+                    order={order} 
+                    
+                    // 🔥 MUHIM: Agar draft bo'lmasa, "undefined" beramiz.
+                    // Eslatma: OrderCard.tsx da (onEdit?: ...) deb so'roq belgisi qo'yilgan bo'lishi shart!
+                    onEdit={isDraft ? handleEdit : undefined} 
+                    onDelete={isDraft ? handleDelete : undefined}
+                  />
+                );
+              })}
             </div>
           </>
         )}
@@ -184,19 +183,7 @@ export default function SellerOrdersPage() {
 
 // --- SUB COMPONENTS ---
 
-function TabButton({ 
-  active, 
-  onClick, 
-  label, 
-  count, 
-  badgeColor 
-}: { 
-  active: boolean; 
-  onClick: () => void; 
-  label: string; 
-  count: number; 
-  badgeColor: string; 
-}) {
+function TabButton({ active, onClick, label, count, badgeColor }: any) {
   return (
     <button
       onClick={onClick}
