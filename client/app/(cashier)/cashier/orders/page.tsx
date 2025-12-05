@@ -3,13 +3,15 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { orderService, Order } from "@/lib/services/order.service";
+import { orderService } from "@/lib/services/order.service";
+import type { Order } from "@/types/api"; 
 import { useSocket } from "@/hooks/use-socket";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Clock,
   CheckCircle2,
+  XCircle, // 🔥 IMPORT QO'SHILDI
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
@@ -40,7 +42,6 @@ export default function AdminOrdersPage() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
 
-  // For confirmation dialogs
   const [confirmOrder, setConfirmOrder] = useState<Order | null>(null);
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
 
@@ -49,49 +50,33 @@ export default function AdminOrdersPage() {
     queryFn: () => orderService.getAll(),
   });
 
-  // Real-time Socket.IO listeners
   useEffect(() => {
     if (!socket) return;
-
-    // Admin xonasiga qo'shilish
     socket.emit("join_admin");
 
-    // Yangi order kelganda
+    const handleRefetch = () => queryClient.invalidateQueries({ queryKey: ["orders"] });
+
     socket.on("new_order", (data) => {
-      console.log("🔔 Yangi buyurtma:", data);
       toast.success(`Yangi buyurtma #${data.id} qabul qilindi!`);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      handleRefetch();
     });
 
-    // Order tahrir qilinganda
     socket.on("order_updated", (data) => {
-      console.log("✏️ Buyurtma tahrir qilindi:", data);
       toast.info(`Buyurtma #${data.id} tahrir qilindi`);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      handleRefetch();
     });
 
-    // Order status o'zgarganda
-    socket.on("order_status_change", (data) => {
-      console.log("🔄 Order status o'zgardi:", data);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-    });
-
-    // Stock yangilanganda
-    socket.on("stock_update", (data) => {
-      console.log("📦 Ombor yangilandi:", data);
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-    });
+    socket.on("order_status_change", handleRefetch);
 
     return () => {
       socket.off("new_order");
       socket.off("order_updated");
       socket.off("order_status_change");
-      socket.off("stock_update");
     };
   }, [socket, queryClient]);
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ orderId, status, orderData }: { orderId: number; status: "completed" | "cancelled"; orderData?: Order }) =>
+    mutationFn: ({ orderId, status }: { orderId: number; status: "completed" | "cancelled" }) =>
       orderService.updateStatus(orderId, status),
     onSuccess: (updatedOrder, variables) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -99,27 +84,13 @@ export default function AdminOrdersPage() {
 
       if (variables.status === "completed") {
         toast.success("Buyurtma tasdiqlandi");
-        console.log("✅ Order confirmed:", updatedOrder);
-        console.log("📄 Order data from variables:", variables.orderData);
-
-        // Tasdiqlangandan keyin chek preview ochish
-        const orderToShow = variables.orderData;
-
+        const orderToShow = confirmOrder; 
         if (orderToShow) {
-          // Dialog ni yopish
           setConfirmOrder(null);
-
-          // Updated order ni yaratish
           const freshOrder = { ...orderToShow, status: "completed" as const };
-          console.log("🎫 Setting receipt order:", freshOrder);
-
-          // Kichik kechikish bilan ochish
           setTimeout(() => {
             setReceiptOrder(freshOrder);
           }, 300);
-        } else {
-          console.error("❌ No order data!");
-          setConfirmOrder(null);
         }
       } else {
         toast.success("Buyurtma bekor qilindi");
@@ -131,12 +102,11 @@ export default function AdminOrdersPage() {
     },
   });
 
-  const pendingOrders = orders.filter((order: Order) => order.status === "draft");
-  const completedOrders = orders.filter((order: Order) => order.status !== "draft");
-  const unprintedOrders = completedOrders.filter((order: Order) => !order.isPrinted);
-  const printedOrders = completedOrders.filter((order: Order) => order.isPrinted);
+  const pendingOrders = useMemo(() => orders.filter((order: Order) => order.status === "draft"), [orders]);
+  const historyOrders = useMemo(() => orders.filter((order: Order) => order.status !== "draft" && order.status !== "cancelled"), [orders]);
+  const unprintedOrders = useMemo(() => historyOrders.filter((order: Order) => !order.isPrinted), [historyOrders]);
+  const printedOrders = useMemo(() => historyOrders.filter((order: Order) => order.isPrinted), [historyOrders]);
 
-  // Callbacks for columns
   const handleViewDetails = (order: Order) => {
     setSelectedOrder(order);
     setIsDetailsOpen(true);
@@ -147,7 +117,6 @@ export default function AdminOrdersPage() {
   };
 
   const handleEdit = (order: Order) => {
-    // Edit sahifasiga o'tkazish (order ID bilan)
     router.push(`/cashier/orders/edit/${order.id}`);
   };
 
@@ -159,7 +128,6 @@ export default function AdminOrdersPage() {
     setCancelOrder(order);
   };
 
-  // Define columns
   const columns = useMemo(() => getColumns({
     onView: handleViewDetails,
     onPrint: handlePrint,
@@ -175,27 +143,25 @@ export default function AdminOrdersPage() {
       : printedOrders;
 
   const EmptyState = ({ type }: { type: TabType }) => (
-    <div className="flex flex-col items-center justify-center py-20 px-4 text-center border-2 border-dashed border-gray-200 dark:border-white/10 rounded-2xl">
-      <div className="h-20 w-20 rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center mb-4">
+    <div className="flex flex-col items-center justify-center py-24 px-4 text-center border-2 border-dashed border-gray-200 dark:border-white/10 rounded-3xl bg-gray-50/50 dark:bg-white/[0.02]">
+      <div className="h-24 w-24 rounded-full bg-white dark:bg-white/5 shadow-sm border border-gray-100 dark:border-white/5 flex items-center justify-center mb-6">
         {type === "pending" ? (
-          <Clock className="w-10 h-10 text-muted-foreground/50" />
+          <Clock className="w-10 h-10 text-amber-500/80" />
         ) : (
-          <CheckCircle2 className="w-10 h-10 text-muted-foreground/50" />
+          <CheckCircle2 className="w-10 h-10 text-emerald-500/80" />
         )}
       </div>
-      <h3 className="text-lg font-bold text-[#212B36] dark:text-white mb-2">
+      <h3 className="text-xl font-bold text-[#212B36] dark:text-white mb-2">
         {type === "pending"
           ? "Kutilayotgan buyurtmalar yo'q"
           : type === "unprinted"
-            ? "Chop etilmagan buyurtmalar yo'q"
+            ? "Barcha cheklar chiqarilgan"
             : "Arxiv bo'sh"}
       </h3>
-      <p className="text-sm text-muted-foreground max-w-[250px]">
+      <p className="text-sm text-muted-foreground max-w-[300px] leading-relaxed">
         {type === "pending"
           ? "Yangi buyurtmalar kelib tushganda shu yerda ko'rinadi"
-          : type === "unprinted"
-            ? "Barcha tasdiqlangan buyurtmalar chop etilgan"
-            : "Chop etilgan buyurtmalar shu yerda saqlanadi"}
+          : "Hozircha hech qanday ma'lumot mavjud emas"}
       </p>
     </div>
   );
@@ -208,113 +174,76 @@ export default function AdminOrdersPage() {
       />
 
       <div className="flex flex-col space-y-6">
-        {/* Custom Tabs */}
         <div className="w-full overflow-x-auto pb-2 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
           <div className="flex p-1 bg-gray-100 dark:bg-white/5 rounded-xl min-w-max md:min-w-0 md:w-fit">
-            <button
-              onClick={() => setActiveTab("pending")}
-              className={cn(
-                "relative px-4 md:px-5 py-2 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap",
-                activeTab === "pending"
-                  ? "bg-white dark:bg-[#132326] text-[#212B36] dark:text-white shadow-sm"
-                  : "text-muted-foreground hover:text-[#212B36] dark:hover:text-white"
-              )}
-            >
-              <div className="flex items-center justify-center gap-2">
-                Kutilayotgan
-                {pendingOrders.length > 0 && (
-                  <Badge className="bg-amber-500 hover:bg-amber-600 border-0 px-1.5 h-5 min-w-[20px] flex items-center justify-center">
-                    {pendingOrders.length}
-                  </Badge>
-                )}
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab("unprinted")}
-              className={cn(
-                "relative px-4 md:px-5 py-2 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap",
-                activeTab === "unprinted"
-                  ? "bg-white dark:bg-[#132326] text-[#212B36] dark:text-white shadow-sm"
-                  : "text-muted-foreground hover:text-[#212B36] dark:hover:text-white"
-              )}
-            >
-              <div className="flex items-center justify-center gap-2">
-                Chop etilmagan
-                <span className="text-xs font-medium opacity-60 bg-gray-200 dark:bg-white/10 px-1.5 h-5 rounded-full flex items-center">
-                  {unprintedOrders.length}
-                </span>
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab("printed")}
-              className={cn(
-                "relative px-4 md:px-5 py-2 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap",
-                activeTab === "printed"
-                  ? "bg-white dark:bg-[#132326] text-[#212B36] dark:text-white shadow-sm"
-                  : "text-muted-foreground hover:text-[#212B36] dark:hover:text-white"
-              )}
-            >
-              <div className="flex items-center justify-center gap-2">
-                Arxiv
-                <span className="text-xs font-medium opacity-60 bg-gray-200 dark:bg-white/10 px-1.5 h-5 rounded-full flex items-center">
-                  {printedOrders.length}
-                </span>
-              </div>
-            </button>
+            <TabButton 
+              active={activeTab === "pending"} 
+              onClick={() => setActiveTab("pending")} 
+              label="Kutilayotgan" 
+              count={pendingOrders.length} 
+              color="bg-amber-500" 
+            />
+            <TabButton 
+              active={activeTab === "unprinted"} 
+              onClick={() => setActiveTab("unprinted")} 
+              label="Chop etilmagan" 
+              count={unprintedOrders.length} 
+              color="bg-blue-500" 
+            />
+            <TabButton 
+              active={activeTab === "printed"} 
+              onClick={() => setActiveTab("printed")} 
+              label="Arxiv" 
+              count={printedOrders.length} 
+              color="bg-gray-500" 
+            />
           </div>
         </div>
 
-        {/* Content Table */}
         {isLoading ? (
           <TableSkeleton columnCount={7} rowCount={8} />
         ) : currentOrders.length === 0 ? (
           <EmptyState type={activeTab} />
         ) : (
-          <DataTable columns={columns} data={currentOrders} />
+          <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] overflow-hidden shadow-sm">
+            <DataTable columns={columns} data={currentOrders} />
+          </div>
         )}
       </div>
 
-      {/* Order Details Dialog */}
       <OrderDetailsDialog
         order={selectedOrder}
         open={isDetailsOpen}
         onOpenChange={setIsDetailsOpen}
       />
 
-      {/* Receipt Preview Dialog */}
       <ReceiptPreview
         order={receiptOrder}
         open={!!receiptOrder}
         onClose={() => setReceiptOrder(null)}
       />
 
-      {/* Confirm Dialog */}
       <AlertDialog open={!!confirmOrder} onOpenChange={(open) => !open && setConfirmOrder(null)}>
-        <AlertDialogContent className="bg-white dark:bg-[#1C2C30] border border-gray-200 dark:border-white/10 shadow-2xl max-w-md">
-          <AlertDialogHeader className="space-y-4">
-            <div className="flex justify-center">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-              </div>
+        <AlertDialogContent className="bg-white dark:bg-[#1C2C30] border-none shadow-2xl max-w-md rounded-2xl">
+          <AlertDialogHeader className="space-y-4 items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
+              <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <AlertDialogTitle className="text-center text-xl">
-              Buyurtmani tasdiqlash
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
-              Buyurtma <span className="font-bold text-[#00B8D9]">#{confirmOrder?.id}</span> tasdiqlangandan keyin chek chiqarish oynasi ochiladi.
-            </AlertDialogDescription>
+            <div>
+              <AlertDialogTitle className="text-xl">Buyurtmani tasdiqlash</AlertDialogTitle>
+              <AlertDialogDescription className="mt-2">
+                Buyurtma <span className="font-bold text-[#00B8D9]">#{confirmOrder?.id}</span> tasdiqlangandan keyin chek chiqarish oynasi ochiladi.
+              </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel className="w-full sm:w-auto">
-              Bekor qilish
-            </AlertDialogCancel>
+          <AlertDialogFooter className="w-full sm:justify-center gap-3">
+            <AlertDialogCancel className="w-full sm:w-auto h-11 rounded-xl">Bekor qilish</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => confirmOrder && updateStatusMutation.mutate({
                 orderId: confirmOrder.id,
-                status: "completed",
-                orderData: confirmOrder
+                status: "completed"
               })}
-              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 h-11 rounded-xl px-8"
               disabled={updateStatusMutation.isPending}
             >
               {updateStatusMutation.isPending ? "Tasdiqlanmoqda..." : "Tasdiqlash"}
@@ -323,33 +252,27 @@ export default function AdminOrdersPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Cancel Dialog */}
       <AlertDialog open={!!cancelOrder} onOpenChange={(open) => !open && setCancelOrder(null)}>
-        <AlertDialogContent className="bg-white dark:bg-[#1C2C30] border border-gray-200 dark:border-white/10 shadow-2xl max-w-md">
-          <AlertDialogHeader className="space-y-4">
-            <div className="flex justify-center">
-              <div className="w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
-                <Clock className="w-8 h-8 text-rose-600 dark:text-rose-400" />
-              </div>
+        <AlertDialogContent className="bg-white dark:bg-[#1C2C30] border-none shadow-2xl max-w-md rounded-2xl">
+          <AlertDialogHeader className="space-y-4 items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center">
+              <XCircle className="w-8 h-8 text-rose-600 dark:text-rose-400" />
             </div>
-            <AlertDialogTitle className="text-center text-xl">
-              Buyurtmani bekor qilish
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
-              Buyurtma <span className="font-bold text-rose-600">#{cancelOrder?.id}</span> bekor qilinadi va mahsulotlar omborga qaytariladi.
-            </AlertDialogDescription>
+            <div>
+              <AlertDialogTitle className="text-xl">Buyurtmani bekor qilish</AlertDialogTitle>
+              <AlertDialogDescription className="mt-2">
+                Buyurtma <span className="font-bold text-rose-600">#{cancelOrder?.id}</span> bekor qilinadi va mahsulotlar omborga qaytariladi.
+              </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel className="w-full sm:w-auto">
-              Qaytish
-            </AlertDialogCancel>
+          <AlertDialogFooter className="w-full sm:justify-center gap-3">
+            <AlertDialogCancel className="w-full sm:w-auto h-11 rounded-xl">Qaytish</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => cancelOrder && updateStatusMutation.mutate({
                 orderId: cancelOrder.id,
-                status: "cancelled",
-                orderData: cancelOrder
+                status: "cancelled"
               })}
-              className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white"
+              className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 h-11 rounded-xl px-8"
               disabled={updateStatusMutation.isPending}
             >
               {updateStatusMutation.isPending ? "Bekor qilinmoqda..." : "Bekor qilish"}
@@ -358,5 +281,26 @@ export default function AdminOrdersPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function TabButton({ active, onClick, label, count, color }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 whitespace-nowrap flex items-center gap-2.5",
+        active
+          ? "bg-white dark:bg-[#132326] text-[#212B36] dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+          : "text-muted-foreground hover:text-[#212B36] dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5"
+      )}
+    >
+      {label}
+      {count > 0 && (
+        <Badge className={cn("border-0 px-2 h-5 min-w-[20px] flex items-center justify-center", color, "text-white")}>
+          {count}
+        </Badge>
+      )}
+    </button>
   );
 }

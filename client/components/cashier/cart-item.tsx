@@ -1,58 +1,71 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Product } from "@/types/api";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Minus, Plus, Trash2, Tag, Percent } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface CartItemProps {
   product: Product;
   quantity: number;
   stockError: string | null;
-  // 🔥 YANGI PROP: Aniq hisoblangan maksimal limit
   maxStock?: number; 
   onUpdateQuantity: (productId: number, quantity: number) => void;
   onRemove: (productId: number) => void;
+  onUpdatePrice?: (productId: number, newPrice: number) => void;
+  
+  // 🔥 YANGI PROP: Ruxsat bormi?
+  canDiscount?: boolean; 
 }
 
 export function CartItem({
   product,
   quantity,
   stockError,
-  maxStock, // Qabul qildik
+  maxStock,
   onUpdateQuantity,
   onRemove,
+  onUpdatePrice,
+  canDiscount = false, // Default false
 }: CartItemProps) {
   const [isFocused, setIsFocused] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
-  const totalPrice = Number(product.price) * quantity;
+  const hasDiscount = Number(product.discountPrice) > 0;
+  const currentPrice = hasDiscount ? Number(product.discountPrice) : Number(product.price);
+  const originalPrice = Number(product.price);
   
-  // 🔥 MUHIM: Agar maxStock berilgan bo'lsa o'shani olamiz, bo'lmasa product.stock ni
+  const totalPrice = currentPrice * quantity;
   const effectiveStock = maxStock !== undefined ? maxStock : Number(product.stock);
-  
   const isMaxedOut = quantity >= effectiveStock;
-
-  // Ogohlantirish faqat limitga yetganda va fokusda
   const showWarning = isMaxedOut && isFocused;
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputValue = e.target.value;
+  const [discountPercent, setDiscountPercent] = useState("");
 
-    if (inputValue === "") {
+  const handleDiscountSubmit = () => {
+    const percent = parseFloat(discountPercent);
+    if (!isNaN(percent) && percent >= 0 && percent <= 100 && onUpdatePrice) {
+      const discountAmount = originalPrice * (percent / 100);
+      const newPrice = originalPrice - discountAmount;
+      onUpdatePrice(product.id, newPrice);
+      setPopoverOpen(false);
+      setDiscountPercent("");
+    }
+  };
+
+  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val === "") {
       onUpdateQuantity(product.id, 0);
       return;
     }
-
-    let val = parseInt(inputValue);
-    if (isNaN(val)) return;
-
-    // 🔥 effectiveStock bilan tekshiramiz
-    if (val > effectiveStock) {
-      val = effectiveStock;
+    const parsed = parseInt(val);
+    if (!isNaN(parsed)) {
+      onUpdateQuantity(product.id, parsed > effectiveStock ? effectiveStock : parsed);
     }
-
-    onUpdateQuantity(product.id, val);
   };
 
   return (
@@ -61,20 +74,29 @@ export function CartItem({
       showWarning && "bg-orange-50/30 dark:bg-orange-900/10"
     )}>
       <div className="flex items-center justify-between gap-3">
+        
         {/* INFO */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-              {product.name}
-            </h4>
-          </div>
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+            {product.name}
+          </h4>
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-[11px] text-muted-foreground font-medium">
-              {formatCurrency(Number(product.price), product.currency)}
-            </p>
-            
+            {hasDiscount ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground line-through decoration-amber-500/60">
+                  {formatCurrency(originalPrice, product.currency)}
+                </span>
+                <p className="text-[11px] font-bold text-amber-500">
+                  {formatCurrency(currentPrice, product.currency)}
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground font-medium">
+                {formatCurrency(originalPrice, product.currency)}
+              </p>
+            )}
             {showWarning && (
-              <span className="text-[10px] text-orange-600 bg-orange-100 px-1 rounded animate-in fade-in zoom-in duration-200">
+              <span className="text-[10px] text-orange-600 bg-orange-100 px-1 rounded animate-in fade-in zoom-in">
                 Maks: {effectiveStock}
               </span>
             )}
@@ -84,65 +106,97 @@ export function CartItem({
         {/* CONTROLS */}
         <div className="flex items-center gap-3 shrink-0">
           <div className={cn(
-            "flex items-center h-8 bg-white dark:bg-transparent border rounded-lg overflow-hidden shadow-sm transition-all duration-200",
-            showWarning
-              ? "border-orange-300 ring-2 ring-orange-100 dark:border-orange-500/50 dark:ring-orange-900/20" 
-              : "border-gray-200 dark:border-white/10 hover:border-[#00B8D9]"
+            "flex items-center h-8 bg-white dark:bg-transparent border rounded-lg overflow-hidden shadow-sm transition-all w-[100px]",
+            showWarning ? "border-orange-300" : "border-gray-200 dark:border-white/10"
           )}>
             <button
-              onClick={() => {
-                if (quantity > 1) onUpdateQuantity(product.id, quantity - 1);
-                else onRemove(product.id);
-              }}
+              onClick={() => quantity > 1 ? onUpdateQuantity(product.id, quantity - 1) : onRemove(product.id)}
               className="w-8 h-full flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 border-r border-gray-100 dark:border-white/5"
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
-            
             <input
-              className={cn(
-                "w-10 h-full text-center text-sm font-bold bg-transparent border-none focus:outline-none p-0 appearance-none selection:bg-[#00B8D9]/20",
-                showWarning ? "text-orange-600" : "text-gray-900 dark:text-white",
-                quantity === 0 && "text-gray-400"
-              )}
-              value={quantity === 0 ? "" : quantity}
-              onChange={handleInputChange}
+              type="number"
+              className="w-full h-full text-center text-sm font-bold bg-transparent border-none focus:outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              value={quantity || ""} 
+              onChange={handleQuantityChange}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder="0"
             />
-
             <button
               onClick={() => onUpdateQuantity(product.id, quantity + 1)}
-              className={cn(
-                "w-8 h-full flex items-center justify-center border-l border-gray-100 dark:border-white/5 transition-colors",
-                isMaxedOut 
-                  ? "opacity-50 cursor-not-allowed bg-gray-50 text-gray-400" 
-                  : "hover:bg-gray-100 text-[#00B8D9]"
-              )}
+              className="w-8 h-full flex items-center justify-center border-l border-gray-100 dark:border-white/5 hover:bg-gray-100 text-[#00B8D9]"
               disabled={isMaxedOut}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="text-right w-[80px]">
-            <p className={cn(
-              "text-sm font-bold",
-              quantity === 0 ? "text-gray-300" : "text-gray-900 dark:text-white"
-            )}>
+          <div className="text-right w-[70px] hidden sm:block">
+            <p className="text-sm font-bold text-gray-900 dark:text-white">
               {formatCurrency(totalPrice, product.currency)}
             </p>
           </div>
 
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => onRemove(product.id)}
-            className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          {/* ACTIONS */}
+          <div className="flex items-center gap-1">
+            
+            {/* 🔥 RUXSAT BO'LSA: Chegirma Tugmasi */}
+            {canDiscount && (
+              <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className={cn(
+                      "h-8 w-8 rounded-lg transition-colors",
+                      hasDiscount ? "text-amber-500 bg-amber-50 dark:bg-amber-900/20" : "text-gray-400 hover:text-[#00B8D9] hover:bg-[#00B8D9]/10"
+                    )}
+                  >
+                    <Tag className="w-4 h-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-60 p-3 bg-white dark:bg-[#1C2C30] border-gray-200 dark:border-white/10 shadow-xl rounded-xl z-[9999]" align="end">
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-xs text-muted-foreground uppercase">Chegirma Foizi (%)</h4>
+                    <div className="flex gap-2 relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                          <Percent className="w-3.5 h-3.5" />
+                      </div>
+                      <Input 
+                        type="number" 
+                        placeholder="0" 
+                        className="h-9 text-sm bg-gray-50 dark:bg-black/20 pl-9"
+                        value={discountPercent}
+                        onChange={(e) => setDiscountPercent(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleDiscountSubmit()}
+                        min={0}
+                        max={100}
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={handleDiscountSubmit}
+                        className="h-9 bg-[#00B8D9] hover:bg-[#00a0bc] text-white"
+                      >
+                        OK
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onRemove(product.id)}
+              className="h-8 w-8 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+
         </div>
       </div>
     </div>

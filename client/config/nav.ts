@@ -40,5 +40,5 @@ export const superAdminNav: NavItem[] = [
 
 export const sellerNav: NavItem[] = [
   { text: "Kassa", url: "/seller/pos", icon: "Store" },
-  { text: "Yakunlanganlar", url: "/seller/completed", icon: "CheckCircle" },
+  { text: "Yakunlanganlar", url: "/seller/orders", icon: "CheckCircle" },
 ];

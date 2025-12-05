@@ -1,7 +1,7 @@
 "use client";
 
 import { CartItem as CartItemComponent } from "./cart-item";
-import { OrderInfoForm } from "@/components/cashier/order-info-form";
+import { OrderInfoForm } from "./order-info-form";
 import { formatCurrency, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -19,13 +19,13 @@ import {
   CreditCard
 } from "lucide-react";
 
-// 🔥 CartItem interfeysini yangilaymiz
 export interface CartItem {
   product: Product;
   quantity: number;
-  originalQuantity?: number; // DB dan kelgan dastlabki soni
+  originalQuantity?: number; 
 }
 
+// 🔥 YANGILANGAN INTERFEYS
 interface OrderCartProps {
   cart: CartItem[];
   customerName: string;
@@ -33,11 +33,26 @@ interface OrderCartProps {
   exchangeRate: string;
   totalAmount: number;
   totalUSD: number;
+  
   onCustomerNameChange: (val: string) => void;
   onPaymentMethodChange: (val: "cash" | "card" | "transfer" | "debt") => void;
   onExchangeRateChange: (val: string) => void;
+  
   onUpdateQuantity: (id: number, qty: number) => void;
   onRemove: (id: number) => void;
+  
+  onUpdatePrice: (id: number, price: number) => void; 
+  
+  // 🔥 YANGI PROPLAR (PAGE DAN KELADI):
+  discountAmount: number; 
+  discountValue: number;            // <-- QO'SHILDI
+  discountType: 'percent' | 'fixed'; // <-- QO'SHILDI
+  onDiscountApply: (amount: number, value: number, type: 'percent' | 'fixed') => void; // Nomini aniqlashtirdik
+  
+  // Eskisini (onDiscountChange) olib tashlasangiz ham bo'ladi, chunki onDiscountApply ishlatyapmiz
+  // onDiscountChange: (val: number) => void; 
+  
+  canDiscount?: boolean;
   getStockError: (item: CartItem) => string | null;
   onSave: () => void;
   isSaving: boolean;
@@ -55,6 +70,15 @@ export function OrderCartFloating({
   onExchangeRateChange,
   onUpdateQuantity,
   onRemove,
+  onUpdatePrice,      
+  
+  // 🔥 YANGI PROPLARNI QABUL QILISH:
+  discountAmount,     
+  discountValue,      // <--
+  discountType,       // <--
+  onDiscountApply,    // <--
+  
+  canDiscount = false,
   getStockError,
   onSave,
   isSaving,
@@ -62,6 +86,7 @@ export function OrderCartFloating({
   
   const itemsToDisplay = cart; 
   const activeItemCount = cart.filter(i => i.quantity > 0).length;
+  const finalTotal = totalAmount - discountAmount;
 
   if (cart.length === 0) return null;
 
@@ -77,7 +102,9 @@ export function OrderCartFloating({
             </div>
             <div className="flex flex-col items-start mr-4">
               <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wider leading-tight">Jami summa</span>
-              <span className="text-xl font-bold tracking-tight">{formatCurrency(totalAmount, "UZS")}</span>
+              <span className="text-xl font-bold tracking-tight">
+                {formatCurrency(finalTotal, "UZS")}
+              </span>
             </div>
             <div className="flex items-center gap-2 text-[#00B8D9] font-bold text-sm uppercase tracking-wider pl-4 border-l border-white/10 h-8">
               Tasdiqlash
@@ -88,7 +115,7 @@ export function OrderCartFloating({
 
       <SheetContent 
         side="right" 
-        className="w-full sm:max-w-[500px] p-0 flex flex-col h-full bg-white dark:bg-[#0B1215] border-l border-border"
+        className="w-full sm:max-w-[600px] p-0 flex flex-col h-full bg-white dark:bg-[#0B1215] border-l border-border"
       >
         <SheetHeader className="shrink-0 px-6 py-5 border-b border-border flex flex-row items-center justify-between bg-white dark:bg-[#132326] space-y-0 shadow-sm z-10">
           <div className="flex items-center gap-3">
@@ -105,49 +132,40 @@ export function OrderCartFloating({
         <div className="flex-1 min-h-0 overflow-hidden bg-gray-50/50 dark:bg-black/20">
           <ScrollArea className="h-full">
             <div className="p-5 space-y-6 pb-10">
+              
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
-                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    Savatdagi mahsulotlar
-                  </h3>
-                  <span className="text-xs font-medium bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-full text-gray-600 dark:text-gray-300">
-                    {activeItemCount} ta
-                  </span>
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Savatdagi mahsulotlar</h3>
+                  <span className="text-xs font-medium bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-full text-gray-600 dark:text-gray-300">{activeItemCount} ta</span>
                 </div>
-                
-                <div className="space-y-2 bg-white dark:bg-[#132326] rounded-xl border border-gray-200 dark:border-white/5 shadow-sm overflow-hidden">
+                <div className="space-y-0 bg-white dark:bg-[#132326] rounded-xl border border-gray-200 dark:border-white/5 shadow-sm overflow-hidden divide-y divide-gray-100 dark:divide-white/5">
                   {itemsToDisplay.map((item) => {
-                    // 🔥 HISOBLASH QISMI:
-                    // Agar originalQuantity bor bo'lsa (ya'ni eski mahsulot), limit = stock + original
-                    // Agar yangi qo'shilgan bo'lsa (original yo'q), limit = stock
                     const limit = Number(item.product.stock) + (item.originalQuantity || 0);
-
                     return (
                       <CartItemComponent
                         key={item.product.id}
                         product={item.product}
                         quantity={item.quantity}
                         stockError={getStockError(item)}
-                        // 🔥 YANGI PROP: Max limitni uzatamiz
                         maxStock={limit}
                         onUpdateQuantity={onUpdateQuantity}
                         onRemove={onRemove}
+                        onUpdatePrice={onUpdatePrice}
+                        canDiscount={canDiscount}
                       />
                     );
                   })}
                 </div>
               </div>
 
-              {/* ... (Qolgan qismi o'zgarishsiz) ... */}
               <div className="space-y-3">
-                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-1">
-                  Mijoz va To'lov
-                </h3>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-1">Mijoz va To'lov</h3>
                 <div className="bg-white dark:bg-[#132326] p-5 rounded-xl border border-gray-200 dark:border-white/5 shadow-sm">
                   <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100 dark:border-white/5">
                     <CreditCard className="w-4 h-4 text-[#00B8D9]" /> 
                     <h3 className="text-sm font-bold text-gray-900 dark:text-white">To'lov ma'lumotlari</h3>
                   </div>
+                  
                   <OrderInfoForm
                     customerName={customerName}
                     paymentMethod={paymentMethod}
@@ -155,6 +173,15 @@ export function OrderCartFloating({
                     onCustomerNameChange={onCustomerNameChange}
                     onPaymentMethodChange={onPaymentMethodChange}
                     onExchangeRateChange={onExchangeRateChange}
+                    
+                    // 🔥 YANGI PROPLAR FORMGA UZATILDI
+                    discountAmount={discountAmount}
+                    discountValue={discountValue  }
+                    discountType={discountType}     // <--
+                    onDiscountApply={onDiscountApply} // <--
+                    
+                    subTotal={totalAmount} 
+                    canDiscount={canDiscount}
                   />
                 </div>
               </div>
@@ -163,28 +190,28 @@ export function OrderCartFloating({
           </ScrollArea>
         </div>
 
-        {/* ... (Footer o'zgarishsiz) ... */}
         <div className="shrink-0 p-6 bg-white dark:bg-[#132326] border-t border-gray-200 dark:border-white/5 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] z-20">
           <div className="flex justify-between items-end mb-4">
              <div className="flex flex-col">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Yakuniy summa</span>
                 <div className="flex items-baseline gap-2">
                    <span className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
-                     {formatCurrency(totalAmount, "UZS")}
+                     {formatCurrency(finalTotal, "UZS")}
                    </span>
+                   {discountAmount > 0 && (
+                     <span className="text-sm text-muted-foreground line-through decoration-rose-500/50">
+                        {formatCurrency(totalAmount, "UZS")}
+                     </span>
+                   )}
                 </div>
              </div>
-             
              {totalUSD > 0 && (
                 <div className="bg-[#00B8D9]/10 px-3 py-1.5 rounded-lg text-right">
                    <span className="text-[10px] font-bold text-[#00B8D9] uppercase block">Valyutada</span>
-                   <span className="text-sm font-bold text-[#00B8D9]">
-                      ${totalUSD.toFixed(2)}
-                   </span>
+                   <span className="text-sm font-bold text-[#00B8D9]">${totalUSD.toFixed(2)}</span>
                 </div>
              )}
           </div>
-          
           <Button 
               onClick={onSave} 
               disabled={isSaving}
@@ -193,14 +220,7 @@ export function OrderCartFloating({
                 "bg-[#00B8D9] hover:bg-[#00a0bc] hover:shadow-[#00B8D9]/40 hover:-translate-y-0.5 active:translate-y-0"
               )}
           >
-              {isSaving ? (
-                "Saqlanmoqda..."
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Save className="w-5 h-5" />
-                  O'zgarishlarni saqlash
-                </div>
-              )}
+              {isSaving ? "Saqlanmoqda..." : <div className="flex items-center gap-2"><Save className="w-5 h-5" /> O'zgarishlarni saqlash</div>}
           </Button>
         </div>
       </SheetContent>

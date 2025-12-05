@@ -16,12 +16,11 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// 🔥 Cashier papkasidagi tayyor komponentlarni ishlatamiz (ular universal)
+// 🔥 BU YERDA "columns" IMPORTI YO'Q, BO'LMASLIGI HAM KERAK
 import { ProductList } from "@/components/cashier/product-list";
-import { OrderCartFloating, CartItem } from "@/components/cashier/order-cart"; 
-// Eslatma: Sizdagi fayl nomi "order-cart.tsx" yoki "order-cart-floating.tsx" ekanligini tekshiring
+import { OrderCartFloating, CartItem } from "@/components/cashier/order-cart";
 
-export default function SellerEditOrderPage() {
+export default function EditOrderPage() {
   const router = useRouter();
   const params = useParams();
   const queryClient = useQueryClient();
@@ -34,6 +33,11 @@ export default function SellerEditOrderPage() {
   const [exchangeRate, setExchangeRate] = useState("12800");
   const [searchQuery, setSearchQuery] = useState("");
   const [loadedOrderId, setLoadedOrderId] = useState<number | null>(null);
+  
+  // 🔥 CHEGIRMA STATELARI
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountValue, setDiscountValue] = useState(0);
+  const [discountType, setDiscountType] = useState<'percent'|'fixed'>('fixed');
 
   // --- QUERIES ---
   const { data: order, isLoading: orderLoading, error: orderError } = useQuery({
@@ -51,7 +55,6 @@ export default function SellerEditOrderPage() {
   const products = useMemo(() => {
     if (!productsResponse) return [];
     if (Array.isArray(productsResponse)) return productsResponse;
-    // Backenddan keladigan formatga qarab moslash
     if ((productsResponse as any).products) return (productsResponse as any).products;
     if ((productsResponse as any).data) {
       return Array.isArray((productsResponse as any).data) 
@@ -64,32 +67,37 @@ export default function SellerEditOrderPage() {
   // --- EFFECT: DATA SYNC ---
   useEffect(() => {
     if (!order || products.length === 0 || !order.items) return;
-    
-    // Qayta yuklashni oldini olish
     if (loadedOrderId === order.id) return;
     
-    // Status tekshiruvi
     if (order.status !== "draft") {
       toast.error("Faqat kutilayotgan buyurtmalarni tahrir qilish mumkin");
-      router.push("/seller/orders"); // 👈 O'ZGARISH: seller/orders
+      router.push("/seller/orders"); // Seller ordersga qaytaramiz
       return;
     }
 
     const method = ["cash", "card", "transfer", "debt"].includes(order.paymentMethod) 
-      ? (order.paymentMethod as "cash" | "card" | "transfer" | "debt") 
+      ? (order.paymentMethod as any) 
       : "cash";
 
     const loadedCart: CartItem[] = (order.items || [])
       .map((item: any) => {
-        const product = products.find((p: Product) => p.id === item.productId);
-        if (!product) return null;
+        const originalProduct = products.find((p: Product) => p.id === item.productId);
+        if (!originalProduct) return null;
         
         const qty = Number(item.quantity);
+        const itemPrice = Number(item.price); 
+        const catalogPrice = Number(originalProduct.price);
+
+        let productForCart = { ...originalProduct };
         
+        // Manual Discount Restore
+        if (itemPrice < catalogPrice) {
+            productForCart.discountPrice = String(itemPrice);
+        }
+
         return { 
-          product, 
+          product: productForCart, 
           quantity: qty,
-          // Limitni to'g'ri hisoblash uchun eski miqdorni saqlaymiz
           originalQuantity: qty 
         };
       })
@@ -99,41 +107,61 @@ export default function SellerEditOrderPage() {
     setCustomerName(order.customerName || "");
     setPaymentMethod(method);
     setExchangeRate(String(order.exchangeRate || "12800"));
+    
+    // 🔥 CHEGIRMA RESTORE
+    setDiscountAmount(Number(order.discountAmount || 0));
+    setDiscountValue(Number(order.discountValue || 0));
+    setDiscountType((order.discountType as any) || 'fixed');
+    
     setLoadedOrderId(order.id);
   }, [order, products, router, loadedOrderId]);
 
-  // --- MUTATION ---
+  // --- HANDLERS ---
+  const handleDiscountApply = (amount: number, value: number, type: 'percent' | 'fixed') => {
+    setDiscountAmount(amount);
+    setDiscountValue(value);
+    setDiscountType(type);
+  };
+
   const updateMutation = useMutation({
     mutationFn: () => {
       const validItems = cart.filter(item => item.quantity > 0);
       if (validItems.length === 0) throw new Error("Kamida bitta mahsulot tanlang");
   
       const payload = {
-        items: validItems.map((item) => ({
-          productId: item.product.id,
-          quantity: String(item.quantity),
-        })),
+        items: validItems.map((item) => {
+          const sellingPrice = Number(item.product.discountPrice) > 0 
+                ? Number(item.product.discountPrice) 
+                : undefined;
+          return {
+            productId: item.product.id,
+            quantity: String(item.quantity),
+            price: sellingPrice
+          };
+        }),
         customerName: customerName || undefined,
         paymentMethod: paymentMethod,
         exchangeRate: exchangeRate,
+        
+        discountAmount: discountAmount,
+        discountValue: discountValue,
+        discountType: discountType,
+        
         type: order?.type || "retail",
       };
       return orderService.update(orderId, payload);
     },
     onSuccess: async () => {
       toast.success("Muvaffaqiyatli saqlandi!");
-      
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.removeQueries({ queryKey: ["order", orderId] }); // Keshni tozalash
-
+      queryClient.removeQueries({ queryKey: ["order", orderId] });
       setLoadedOrderId(null);
-      router.push("/seller/completed"); 
+      router.push("/seller/orders"); // Seller ordersga qaytish
     },
     onError: (error: any) => toast.error(error?.message || "Xatolik"),
   });
 
-  // --- HANDLERS ---
-  
+  // ... Cart Handlers (Add, Decrease, Remove, Update) ...
   const addToCart = (product: Product) => {
     setCart(prev => {
       const exists = prev.find(i => i.product.id === product.id);
@@ -143,45 +171,48 @@ export default function SellerEditOrderPage() {
       return [...prev, { product, quantity: 1 }];
     });
   };
-
   const decreaseFromCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id);
       if (!existing) return prev;
-      if (existing.quantity <= 1) {
-        return prev.filter(i => i.product.id !== product.id);
-      }
+      if (existing.quantity <= 1) return prev.filter((i) => i.product.id !== product.id);
       return prev.map(i => i.product.id === product.id ? {...i, quantity: i.quantity - 1} : i);
     });
   };
-
   const removeFromCart = (id: number) => {
     setCart(prev => prev.filter(i => i.product.id !== id));
   };
-
   const updateQuantity = (id: number, qty: number) => {
     if (qty < 0) return;
     setCart(prev => prev.map(i => i.product.id === id ? {...i, quantity: qty} : i));
   };
-  
-  // Zaxira tekshiruvi (Save bosilganda)
+  const handleUpdatePrice = (id: number, newPrice: number) => {
+    setCart((prev) => prev.map((item) => {
+        if (item.product.id === id) {
+            return {
+                ...item,
+                product: { ...item.product, discountPrice: String(newPrice) }
+            };
+        }
+        return item;
+    }));
+  };
   const getStockError = (item: CartItem): string | null => {
-     // Limit = Hozirgi ombor + Buyurtma ichidagi eski son
      const limit = Number(item.product.stock) + (item.originalQuantity || 0);
-     if(item.quantity > limit) {
-       return `Omborda faqat ${limit} ta bor`;
-     }
+     if(item.quantity > limit) return `Omborda faqat ${limit} ta bor`;
      return null;
   };
 
-  // --- CALCULATIONS ---
+  // Calculations
   const { totalAmount, totalUSD } = useMemo(() => {
     let usd = 0, uzs = 0;
     cart.forEach((item) => {
-      const price = Number(item.product.price);
+      const discountP = parseFloat(item.product.discountPrice || "0");
+      const regularP = parseFloat(item.product.price || "0");
+      const finalPrice = (discountP > 0) ? discountP : regularP;
       const qty = item.quantity;
-      if (item.product.currency === "USD") usd += price * qty;
-      else uzs += price * qty;
+      if (item.product.currency === "USD") usd += finalPrice * qty;
+      else uzs += finalPrice * qty;
     });
     const rate = parseFloat(exchangeRate) || 1;
     return { totalAmount: uzs + usd * rate, totalUSD: usd };
@@ -192,19 +223,19 @@ export default function SellerEditOrderPage() {
     const q = searchQuery.toLowerCase();
     return products.filter((p: Product) => 
       p.name.toLowerCase().includes(q) || 
-      p.category?.name?.toLowerCase().includes(q)
+      p.category?.name?.toLowerCase().includes(q) ||
+      String(p.barcode || "").includes(q)
     );
   }, [products, searchQuery]);
 
-  // --- RENDER ---
-  if (orderLoading || productsLoading) return <div className="p-6"><Skeleton className="h-[500px] w-full" /></div>;
+  if (orderLoading || productsLoading) return <div className="p-6"><Skeleton className="h-[600px] w-full" /></div>;
   
   if (orderError || !order) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <AlertCircle className="w-16 h-16 text-rose-500" />
         <h2 className="text-2xl font-bold">Buyurtma topilmadi</h2>
-        <Button onClick={() => router.push("/seller/orders")}> {/* 👈 O'ZGARISH */}
+        <Button onClick={() => router.push("/seller/orders")}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Orqaga
         </Button>
       </div>
@@ -217,13 +248,12 @@ export default function SellerEditOrderPage() {
         title={`Buyurtma #${orderId} ni tahrir qilish`}
         description={`${cart.length} xil mahsulot savatda`}
       >
-        <Button variant="outline" size="sm" onClick={() => router.push("/seller/pos")}> {/* 👈 O'ZGARISH */}
+        <Button variant="outline" size="sm" onClick={() => router.push("/seller/orders")}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Bekor qilish
         </Button>
       </PageHeader>
 
       <div className="flex-1 min-h-0 px-4">
-        {/* Cashier komponentlarini Sellerda ishlatish */}
         <ProductList
           products={filteredProducts}
           searchQuery={searchQuery}
@@ -242,11 +272,29 @@ export default function SellerEditOrderPage() {
         exchangeRate={exchangeRate}
         totalAmount={totalAmount}
         totalUSD={totalUSD}
+        
         onCustomerNameChange={setCustomerName}
         onPaymentMethodChange={setPaymentMethod}
         onExchangeRateChange={setExchangeRate}
+        
         onUpdateQuantity={updateQuantity}
         onRemove={removeFromCart}
+        
+        onUpdatePrice={handleUpdatePrice}
+        
+        // 🔥 YANGI PROPLAR
+        discountAmount={discountAmount}
+        discountValue={discountValue}
+        discountType={discountType}
+        onDiscountApply={handleDiscountApply}
+
+        // 🔥 SELLER EDIT QILISH PAYTIDA (Agar siz seller ham tahrirlashini xohlasangiz true qiling)
+        // Hozir siz "Seller qila olmasin" degan edingiz, lekin bu "Edit Page" odatda
+        // o'z buyurtmasini tuzatish uchun. Agar faqat Cashier/Admin ruxsatli bo'lsa,
+        // bu pagega kirish huquqini middleware orqali cheklash kerak.
+        // Agar bu page Seller uchun bo'lsa:
+        canDiscount={false} // ❌ Seller chegirma bera olmaydi, faqat mahsulot qo'sha oladi/ayiradi
+        
         getStockError={getStockError}
         onSave={() => updateMutation.mutate()}
         isSaving={updateMutation.isPending}

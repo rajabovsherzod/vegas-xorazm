@@ -1,50 +1,74 @@
 import { z } from "zod";
-import { orderTypeEnum, paymentMethodEnum } from "../../db/schema";
 
-// 1. Order Item
-const orderItemSchema = z.object({
-  // 🛠️ TUZATILDI: Ichidagi { invalid_type_error: ... } ni olib tashladik.
-  // Shunchaki z.number() ni o'zi "Required" va "Number bo'lishi shart" degan ma'noni bildiradi.
-  productId: z.number(),
-
-  quantity: z.string().regex(/^\d+(\.\d{1,2})?$/, "Miqdor to'g'ri bo'lishi kerak (masalan: '2' yoki '1.5')"),
-});
-
-// 2. Create Order
+// 1. CREATE ORDER SCHEMA
 export const createOrderSchema = z.object({
   body: z.object({
-    partnerId: z.number().optional(),
     customerName: z.string().optional(),
+    type: z.enum(["retail", "wholesale"]).default("retail"),
+    paymentMethod: z.enum(["cash", "card", "transfer", "debt"]).default("cash"),
+    exchangeRate: z.string().or(z.number()).optional(),
+    
+    // 🔥 YANGI: Umumiy Chegirma "Retsepti"
+    discountAmount: z.number().optional(), // Natija (so'mda)
+    discountValue: z.number().optional(),  // Kiritilgan qiymat (10 yoki 50000)
+    discountType: z.enum(["percent", "fixed"]).optional(), // Turi
 
-    type: z.enum(orderTypeEnum.enumValues as [string, ...string[]]).default('retail'),
-    paymentMethod: z.enum(paymentMethodEnum.enumValues as [string, ...string[]]).default('cash'),
-
-    // --- YANGI: Kursni qabul qilamiz ---
-    // Default 1 berib turamiz, agar frontend yubormasa (eski mantiq buzilmasligi uchun)
-    exchangeRate: z.string().regex(/^\d+(\.\d{1,2})?$/, "Kurs raqam bo'lishi kerak").default("1"),
-
-    items: z.array(orderItemSchema).min(1, "Kamida bitta mahsulot tanlanishi kerak"),
+    items: z.array(
+      z.object({
+        productId: z.number().refine((val) => val > 0, { message: "Mahsulot IDsi majburiy" }),
+        quantity: z.string().or(z.number()),
+        
+        // 🔥 YANGI: Item Chegirmasi "Retsepti"
+        price: z.number().optional(), // Sotilgan narx (natija)
+        manualDiscountValue: z.number().optional(),
+        manualDiscountType: z.enum(["percent", "fixed"]).optional(),
+      })
+    ).min(1, "Kamida bitta mahsulot bo'lishi kerak"),
+    
+    partnerId: z.number().optional(),
   }),
 });
 
-// 3. Update Order Status
-export const updateOrderStatusSchema = z.object({
-  body: z.object({
-    status: z.enum(["completed", "cancelled"]),
-  }),
-});
-
-// 4. Update Order (Tahrir qilish)
+// 2. UPDATE ORDER SCHEMA
 export const updateOrderSchema = z.object({
   body: z.object({
-    items: z.array(orderItemSchema).min(1, "Kamida bitta mahsulot tanlanishi kerak"),
     customerName: z.string().optional(),
-    paymentMethod: z.enum(paymentMethodEnum.enumValues as [string, ...string[]]).optional(),
-    exchangeRate: z.string().regex(/^\d+(\.\d{1,2})?$/, "Kurs raqam bo'lishi kerak").optional(),
-    type: z.enum(orderTypeEnum.enumValues as [string, ...string[]]).optional(),
+    type: z.enum(["retail", "wholesale"]).optional(),
+    paymentMethod: z.enum(["cash", "card", "transfer", "debt"]).optional(),
+    exchangeRate: z.string().or(z.number()).optional(),
+    
+    // 🔥 YANGI
+    discountAmount: z.number().optional(),
+    discountValue: z.number().optional(),
+    discountType: z.enum(["percent", "fixed"]).optional(),
+
+    items: z.array(
+      z.object({
+        productId: z.number(),
+        quantity: z.string().or(z.number()),
+        
+        // 🔥 YANGI
+        price: z.number().optional(),
+        manualDiscountValue: z.number().optional(),
+        manualDiscountType: z.enum(["percent", "fixed"]).optional(),
+      })
+    ).min(1),
   }),
+});
+
+// ... (Update Status o'zgarishsiz qoladi)
+export const updateOrderStatusSchema = z.object({
+    body: z.object({
+      status: z.enum([
+        "draft", 
+        "completed", 
+        "cancelled", 
+        "fully_refunded", 
+        "partially_refunded"
+      ]),
+    }),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>["body"];
-export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>["body"];
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>["body"];
+export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>["body"];

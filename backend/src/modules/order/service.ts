@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { orders, orderItems, products, NewOrder } from "@/db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql, desc } from "drizzle-orm";
 import ApiError from "@/utils/ApiError";
 import logger from "@/utils/logger";
 import { getIO } from "@/socket";
@@ -10,15 +10,11 @@ export const orderService = {
   
   /**
    * 1. GET BY SELLER ID
-   * Sellerga tegishli barcha buyurtmalarni olish
    */
   getBySellerId: async (sellerId: number) => {
-    if (!sellerId) {
-      throw new ApiError(400, "Seller ID kiritilmagan");
-    }
+    if (!sellerId) throw new ApiError(400, "Seller ID kiritilmagan");
 
-    // So'rovni amalga oshiramiz
-    const sellerOrders = await db.query.orders.findMany({
+    return await db.query.orders.findMany({
       where: eq(orders.sellerId, sellerId),
       orderBy: (orders, { desc }) => [desc(orders.createdAt)],
       with: {
@@ -27,18 +23,14 @@ export const orderService = {
         items: { with: { product: true } }
       }
     });
-
-    return sellerOrders;
   },
 
   /**
-   * 2. CREATE DRAFT
-   * Yangi buyurtma yaratish (Transaction bilan)
+   * 2. CREATE (BETON NARX VA CHEGIRMA LOGIKASI)
    */
   create: async (userId: number, payload: CreateOrderInput) => {
     return await db.transaction(async (tx) => {
-      // 1. Valyuta kursi va mahsulotlarni tekshirish
-      const currentRate = parseFloat(payload.exchangeRate || "1");
+      const currentRate = parseFloat(String(payload.exchangeRate || "1"));
       const productIds = payload.items.map((item) => item.productId);
 
       if (productIds.length === 0) throw new ApiError(400, "Mahsulotlar tanlanmagan");
@@ -47,19 +39,18 @@ export const orderService = {
         where: inArray(products.id, productIds),
       });
 
-      let totalAmount = 0;
+      let totalAmount = 0; // Asl narxlar yig'indisi (Chegirmasiz)
+      let itemsTotal = 0;  // Item chegirmalari ayirilgan summa
       const itemsToInsert: any[] = [];
       const changedStocks: { id: number; quantity: number }[] = [];
 
-      // 2. Har bir itemni hisoblash va omborni yangilash
       for (const item of payload.items) {
         const product = dbProducts.find((p) => p.id === item.productId);
-
-        // Mahsulot validatsiyasi
         if (!product || !product.isActive || product.isDeleted) {
-          throw new ApiError(400, `Mahsulot topilmadi yoki nofaol (ID: ${item.productId})`);
+          throw new ApiError(400, `Mahsulot xatosi (ID: ${item.productId})`);
         }
 
+        // 1. Stock Tekshirish va Yangilash
         const currentStock = Number(product.stock);
         const requestQty = Number(item.quantity);
 
@@ -67,7 +58,6 @@ export const orderService = {
           throw new ApiError(409, `Omborda yetarli emas: ${product.name}`);
         }
 
-        // Ombordan ayiramiz
         await tx.update(products)
           .set({
             stock: String(currentStock - requestQty),
@@ -77,48 +67,98 @@ export const orderService = {
 
         changedStocks.push({ id: product.id, quantity: requestQty });
 
-        // Narxni hisoblash
-        let finalPrice = Number(product.price);
-        if (product.currency === 'USD') {
-          finalPrice = finalPrice * currentRate;
+        // 2. Narx Mantiqi (Item Price Logic)
+        const originalPrice = Number(product.price); // Katalogdagi asl narx
+        
+        // Sotiladigan narxni aniqlash:
+        // A) Agar frontend 'price' yuborgan bo'lsa (Manual Discount), o'shani olamiz.
+        // B) Agar yubormagan bo'lsa, lekin mahsulotda AKSIYA (discountPrice) bo'lsa, o'shani olamiz.
+        // C) Bo'lmasa, asl narxni olamiz.
+        let soldPrice = item.price !== undefined ? Number(item.price) : originalPrice;
+
+        if (item.price === undefined && Number(product.discountPrice) > 0) {
+            soldPrice = Number(product.discountPrice);
         }
 
-        const lineTotal = finalPrice * requestQty;
-        totalAmount += lineTotal;
+        // Valyuta konvertatsiyasi (USD -> UZS)
+        if (product.currency === 'USD') {
+          soldPrice = soldPrice * currentRate;
+          // originalPrice ni ham UZS ga o'giramiz (totalAmount hisobi uchun)
+        }
+        const originalPriceInUzs = product.currency === 'USD' ? originalPrice * currentRate : originalPrice;
+
+        // Summalarni hisoblash
+        const lineTotalOriginal = originalPriceInUzs * requestQty;
+        const lineTotalSold = soldPrice * requestQty;
+
+        totalAmount += lineTotalOriginal;
+        itemsTotal += lineTotalSold;
 
         itemsToInsert.push({
           productId: product.id,
           quantity: String(requestQty),
-          price: String(finalPrice),
-          originalCurrency: product.currency,
-          totalPrice: String(lineTotal),
+          price: String(soldPrice), // Sotilgan narx
+          originalPrice: String(originalPriceInUzs), // Asl narx (Statistika va Vozvrat uchun)
+          totalPrice: String(lineTotalSold),
+
+          // 🔥 YANGI: Item Discount Tarixi
+          manualDiscountValue: String(item.manualDiscountValue || 0),
+          manualDiscountType: item.manualDiscountType || 'fixed',
         });
       }
 
-      // 3. Buyurtmani bazaga yozish
+      // 3. Umumiy Chegirma Mantiqi (Global Discount Logic)
+      const discountValue = Number(payload.discountValue || 0);
+      const discountType = payload.discountType || 'fixed';
+      
+      let globalDiscountAmount = 0;
+
+      if (discountValue > 0) {
+        if (discountType === 'percent') {
+          // Foiz bo'lsa: Itemlar yig'indisidan foiz olinadi
+          globalDiscountAmount = itemsTotal * (discountValue / 100);
+        } else {
+          // Fixed bo'lsa: Aniq summa
+          globalDiscountAmount = discountValue;
+        }
+      }
+
+      // Final Summa
+      const finalAmount = itemsTotal - globalDiscountAmount;
+
+      if (finalAmount < 0) throw new ApiError(400, "Chegirma summasi umumiy summadan oshib ketdi");
+
+      // 4. Order Yaratish
       const newOrderData: NewOrder = {
         sellerId: userId,
         partnerId: payload.partnerId ?? null,
         customerName: payload.customerName || null,
-        totalAmount: String(totalAmount),
-        finalAmount: String(totalAmount),
+        
+        totalAmount: String(totalAmount),       // Chegirmasiz to'liq summa
+        discountAmount: String(globalDiscountAmount), // Hisoblangan umumiy chegirma
+        finalAmount: String(finalAmount),       // To'lanadigan summa
+        
+        // 🔥 Chegirma "Retsepti"
+        discountValue: String(discountValue),   
+        discountType: discountType,
+        
         currency: 'UZS',
         exchangeRate: String(currentRate),
         status: 'draft',
-        type: payload.type as "retail" | "wholesale",
-        paymentMethod: payload.paymentMethod as "cash" | "card" | "transfer" | "debt",
+        type: payload.type as any,
+        paymentMethod: payload.paymentMethod as any,
       };
 
       const [newOrder] = await tx.insert(orders).values(newOrderData).returning();
 
-      // 4. Itemlarni ulash
+      // Items ulash
       if (itemsToInsert.length > 0) {
         await tx.insert(orderItems).values(
           itemsToInsert.map(item => ({ ...item, orderId: newOrder.id }))
         );
       }
 
-      // 5. Socket Xabarlarini yuborish
+      // Socket Notification
       try {
         const io = getIO();
         io.to("admin_room").emit("new_order", {
@@ -128,11 +168,8 @@ export const orderService = {
           totalAmount: newOrder.totalAmount,
           createdAt: newOrder.createdAt
         });
-
         io.emit("stock_update", { action: "subtract", items: changedStocks });
-      } catch (error) {
-        logger.error("Socket notification error:", error);
-      }
+      } catch (error) { logger.error("Socket error:", error); }
 
       return newOrder;
     });
@@ -140,7 +177,6 @@ export const orderService = {
 
   /**
    * 3. GET ALL
-   * Adminlar uchun hamma buyurtmalar
    */
   getAll: async () => {
     return await db.query.orders.findMany({
@@ -155,7 +191,6 @@ export const orderService = {
 
   /**
    * 4. GET BY ID
-   * Bitta buyurtmani to'liq ma'lumotlari bilan olish
    */
   getById: async (orderId: number) => {
     const order = await db.query.orders.findFirst({
@@ -163,23 +198,15 @@ export const orderService = {
       with: {
         seller: { columns: { id: true, fullName: true, username: true } },
         partner: { columns: { id: true, name: true, phone: true } },
-        items: {
-          with: {
-            product: {
-              columns: { id: true, name: true, price: true, currency: true, stock: true, unit: true, isActive: true }
-            }
-          }
-        }
+        items: { with: { product: true } }
       }
     });
-
     if (!order) throw new ApiError(404, "Buyurtma topilmadi");
     return order;
   },
 
   /**
    * 5. UPDATE STATUS
-   * Statusni o'zgartirish (Cancelled bo'lsa omborni qaytarish)
    */
   updateStatus: async (orderId: number, adminId: number, payload: UpdateOrderStatusInput) => {
     return await db.transaction(async (tx) => {
@@ -189,32 +216,31 @@ export const orderService = {
       });
 
       if (!order) throw new ApiError(404, "Buyurtma topilmadi");
-      if (order.status !== 'draft') throw new ApiError(400, "Buyurtma allaqachon yopilgan");
+      
+      // Status validatsiyasi
+      if (order.status !== 'draft' && payload.status === 'cancelled') {
+         throw new ApiError(400, "Faqat kutilayotgan buyurtmalarni bekor qilish mumkin");
+      }
 
-      // Agar 'cancelled' bo'lsa, mahsulotlarni omborga qaytaramiz
+      // Bekor qilish logikasi (Stock qaytarish)
       if (payload.status === 'cancelled') {
         const restoredStocks: { id: number; quantity: number }[] = [];
-
         for (const item of order.items) {
-          // Atomic update (Race condition oldini olish uchun SQL ishlatamiz)
           await tx.execute(
             sql`UPDATE products SET stock = stock + ${item.quantity} WHERE id = ${item.productId}`
           );
           restoredStocks.push({ id: item.productId, quantity: Number(item.quantity) });
         }
-
-        // Socket: Mahsulotlar qaytganini bildirish
         try {
           const io = getIO();
           io.emit("stock_update", { action: "add", items: restoredStocks });
           io.emit("order_status_change", { id: orderId, status: "cancelled" });
-        } catch (e) { logger.error("Socket error", e); }
+        } catch (e) { logger.error(e); }
       }
 
-      // Statusni yangilash
       const [updatedOrder] = await tx.update(orders)
         .set({
-          status: payload.status,
+          status: payload.status as any,
           cashierId: adminId,
           updatedAt: new Date(),
         })
@@ -222,9 +248,8 @@ export const orderService = {
         .returning();
 
       if (payload.status === 'completed') {
-        try {
-          getIO().emit("order_status_change", { id: orderId, status: "completed" });
-        } catch (e) { logger.error("Socket error", e); }
+        try { getIO().emit("order_status_change", { id: orderId, status: "completed" }); } 
+        catch (e) { logger.error(e); }
       }
 
       return updatedOrder;
@@ -232,8 +257,7 @@ export const orderService = {
   },
 
   /**
-   * 6. UPDATE ORDER (EDIT)
-   * Draft orderni tahrirlash (Eski itemlarni qaytarish -> Yangisini olish)
+   * 6. UPDATE ORDER (EDIT) - (BETON YANGILASH)
    */
   update: async (orderId: number, userId: number, userRole: string, payload: UpdateOrderInput) => {
     return await db.transaction(async (tx) => {
@@ -244,12 +268,12 @@ export const orderService = {
       });
 
       if (!order) throw new ApiError(404, "Buyurtma topilmadi");
-      if (order.status !== 'draft') throw new ApiError(400, "Faqat kutilayotgan orderlarni tahrir qilish mumkin");
+      if (order.status !== 'draft') throw new ApiError(400, "Faqat kutilayotgan orderlar tahrirlanadi");
       if (userRole === 'seller' && order.sellerId !== userId) throw new ApiError(403, "Ruxsat yo'q");
 
       const stockChanges: { id: number; quantity: number; action: 'add' | 'subtract' }[] = [];
 
-      // 2. A) ESKI ITEMLARNI QAYTARISH (Rollback stock)
+      // 2. ESKI ITEMLARNI QAYTARISH (Stock Rollback)
       for (const oldItem of order.items) {
         await tx.execute(
           sql`UPDATE products SET stock = stock + ${oldItem.quantity} WHERE id = ${oldItem.productId}`
@@ -257,79 +281,116 @@ export const orderService = {
         stockChanges.push({ id: oldItem.productId, quantity: Number(oldItem.quantity), action: 'add' });
       }
 
-      // 2. B) ESKI ITEMLARNI BAZADAN O'CHIRISH
+      // Eski itemsni o'chirish
       await tx.delete(orderItems).where(eq(orderItems.orderId, orderId));
 
-      // 3. YANGI ITEMLARNI QAYTA HISOBLASH VA OLISH
+      // 3. YANGI ITEMLARNI QO'SHISH (Create dagi mantiq bilan bir xil)
       const newItems = payload.items;
       const newProductIds = newItems.map(item => item.productId);
       const dbProducts = await tx.query.products.findMany({ where: inArray(products.id, newProductIds) });
 
       let totalAmount = 0;
+      let itemsTotal = 0;
       const itemsToInsert: any[] = [];
-      const currentRate = parseFloat(payload.exchangeRate || order.exchangeRate || "1");
+      const currentRate = parseFloat(String(payload.exchangeRate || order.exchangeRate || "1"));
 
       for (const newItem of newItems) {
         const product = dbProducts.find(p => p.id === newItem.productId);
-        if (!product || !product.isActive) throw new ApiError(400, `Mahsulot xatosi (ID: ${newItem.productId})`);
+        if (!product || !product.isActive) throw new ApiError(400, "Xato mahsulot");
 
-        // Hozirgi stockni yangidan olamiz (qaytarilganidan keyin)
-        const [freshData] = await tx.select({ stock: products.stock }).from(products).where(eq(products.id, product.id));
-        const currentStock = Number(freshData?.stock || 0);
+        // Yangi stock tekshiruvi
+        const currentStock = Number(product.stock); 
         const requestQty = Number(newItem.quantity);
 
-        if (currentStock < requestQty) {
-          throw new ApiError(409, `Yetarli emas: ${product.name}. Mavjud: ${currentStock}`);
-        }
+        if (currentStock < requestQty) throw new ApiError(409, `Yetarli emas: ${product.name}`);
 
-        // Ombordan ayiramiz
         await tx.update(products)
           .set({ stock: String(currentStock - requestQty), updatedAt: new Date() })
           .where(eq(products.id, product.id));
 
         stockChanges.push({ id: product.id, quantity: requestQty, action: 'subtract' });
 
-        // Narx
-        let finalPrice = Number(product.price);
-        if (product.currency === 'USD') finalPrice *= currentRate;
-        const lineTotal = finalPrice * requestQty;
-        totalAmount += lineTotal;
+        // Narx Mantiqi
+        const originalPrice = Number(product.price);
+        let soldPrice = newItem.price !== undefined ? Number(newItem.price) : originalPrice;
+
+        if (newItem.price === undefined && Number(product.discountPrice) > 0) {
+            soldPrice = Number(product.discountPrice);
+        }
+
+        if (product.currency === 'USD') {
+          soldPrice = soldPrice * currentRate;
+        }
+        const originalPriceInUzs = product.currency === 'USD' ? originalPrice * currentRate : originalPrice;
+
+        const lineTotalOriginal = originalPriceInUzs * requestQty;
+        const lineTotalSold = soldPrice * requestQty;
+
+        totalAmount += lineTotalOriginal;
+        itemsTotal += lineTotalSold;
 
         itemsToInsert.push({
           orderId: orderId,
           productId: product.id,
           quantity: String(requestQty),
-          price: String(finalPrice),
-          originalCurrency: product.currency,
-          totalPrice: String(lineTotal),
+          price: String(soldPrice),
+          originalPrice: String(originalPriceInUzs),
+          totalPrice: String(lineTotalSold),
+          
+          // 🔥 YANGI: Update paytida ham tarix saqlanadi
+          manualDiscountValue: String(newItem.manualDiscountValue || 0),
+          manualDiscountType: newItem.manualDiscountType || 'fixed',
         });
       }
 
-      // 4. YANGI ITEMLARNI SAQLASH
       if (itemsToInsert.length > 0) {
         await tx.insert(orderItems).values(itemsToInsert);
       }
 
-      // 5. ORDERNI YANGILASH
+      // UMUMIY CHEGIRMA (Recalculate)
+      const discountValue = Number(payload.discountValue || 0);
+      const discountType = payload.discountType || 'fixed';
+      
+      let globalDiscountAmount = 0;
+      if (discountValue > 0) {
+        if (discountType === 'percent') {
+          globalDiscountAmount = itemsTotal * (discountValue / 100);
+        } else {
+          globalDiscountAmount = discountValue;
+        }
+      }
+      
+      // Frontenddan discountAmount kelsa ham, biz backend hisobiga ustunlik beramiz yoki solishtiramiz.
+      // Beton tizimda backend hisoblagani ma'qul.
+      
+      const finalAmount = itemsTotal - globalDiscountAmount;
+      if (finalAmount < 0) throw new ApiError(400, "Chegirma xato");
+
       const [updatedOrder] = await tx.update(orders)
         .set({
           customerName: payload.customerName ?? order.customerName,
           paymentMethod: (payload.paymentMethod ?? order.paymentMethod) as any,
           type: (payload.type ?? order.type) as any,
           exchangeRate: String(currentRate),
+          
           totalAmount: String(totalAmount),
-          finalAmount: String(totalAmount),
+          discountAmount: String(globalDiscountAmount),
+          finalAmount: String(finalAmount),
+          
+          // 🔥 Chegirma "Retsepti"ni yangilash
+          discountValue: String(discountValue),
+          discountType: discountType,
+          
           updatedAt: new Date(),
         })
         .where(eq(orders.id, orderId))
         .returning();
 
-      // 6. SOCKET NOTIFICATION
       try {
         const io = getIO();
         io.to("admin_room").emit("order_updated", { id: orderId, updatedBy: userId, totalAmount: updatedOrder.totalAmount });
-        io.emit("stock_update", { action: "refresh", items: stockChanges }); // Refresh komandasi
-      } catch (e) { logger.error("Socket error", e); }
+        io.emit("stock_update", { action: "refresh", items: stockChanges });
+      } catch (e) { logger.error(e); }
 
       return updatedOrder;
     });
@@ -343,7 +404,6 @@ export const orderService = {
       .set({ isPrinted: true })
       .where(eq(orders.id, id))
       .returning();
-
     if (!updatedOrder) throw new ApiError(404, "Buyurtma topilmadi");
     return updatedOrder;
   }

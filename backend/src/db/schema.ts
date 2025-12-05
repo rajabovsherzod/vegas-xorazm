@@ -8,13 +8,16 @@ export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'card', 'tran
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'cashier', 'seller', 'developer']);
 export const errorLogLevelEnum = pgEnum('error_log_level', ['error', 'warning', 'info']);
 
-// 🔥 STATUSLAR (Refund uchun kerak)
+// 🔥 YANGI ENUM: Chegirma turi
+export const discountTypeEnum = pgEnum('discount_type', ['percent', 'fixed']);
+
+// STATUSLAR
 export const orderStatusEnum = pgEnum('order_status', [
-  'draft',              // Qoralama (savdo jarayoni)
-  'completed',          // Sotildi (pul olindi)
-  'cancelled',          // Bekor qilindi (sotilmay turib)
-  'fully_refunded',     // To'liq qaytarildi
-  'partially_refunded'  // Qisman qaytarildi
+  'draft',              
+  'completed',          
+  'cancelled',          
+  'fully_refunded',     
+  'partially_refunded'  
 ]);
 
 // ---------------------------
@@ -85,7 +88,7 @@ export const partners = pgTable('partners', {
 });
 
 // ---------------------------
-// 5. MAHSULOTLAR (Products)
+// 5. MAHSULOTLAR
 // ---------------------------
 export const products = pgTable('products', {
   id: serial('id').primaryKey(),
@@ -95,12 +98,12 @@ export const products = pgTable('products', {
   
   price: decimal('price', { precision: 15, scale: 2 }).notNull(), // Asosiy narx
   
-  // 🔥 1-TURDAGI CHEGIRMA: MAHSULOTGA MUDDATLI FOIZ/NARX BELGILASH
-  discountPrice: decimal('discount_price', { precision: 15, scale: 2 }), // Aksiya narxi
-  discountStart: timestamp('discount_start'), // Qachondan
-  discountEnd: timestamp('discount_end'),     // Qachongacha
+  // CHEGIRMA (PROMO)
+  discountPrice: decimal('discount_price', { precision: 15, scale: 2 }), 
+  discountStart: timestamp('discount_start'), 
+  discountEnd: timestamp('discount_end'),     
 
-  originalPrice: decimal('original_price', { precision: 15, scale: 2 }), // Kelish narxi (foyda hisoblash uchun)
+  originalPrice: decimal('original_price', { precision: 15, scale: 2 }), 
   
   currency: currencyEnum('currency').default('UZS').notNull(),
   stock: decimal('stock', { precision: 10, scale: 2 }).default('0'),
@@ -130,7 +133,7 @@ export const priceHistory = pgTable('price_history', {
 });
 
 // ---------------------------
-// 7. STOCK HISTORY (Kirimlar)
+// 7. STOCK HISTORY
 // ---------------------------
 export const stockHistory = pgTable('stock_history', {
   id: serial('id').primaryKey(),
@@ -145,26 +148,23 @@ export const stockHistory = pgTable('stock_history', {
 });
 
 // ---------------------------
-// 8. CHEKLAR (Orders) - 🔥 3-TUR CHEGIRMA: UMUMIY SUMMAGA
+// 8. ORDERS (Yangilandi: Beton Chegirma)
 // ---------------------------
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
 
-  // 🔥 SUMMALAR LOGIKASI:
-  // totalAmount: Barcha itemlarning yig'indisi (10,000,000)
   totalAmount: decimal('total_amount', { precision: 18, scale: 2 }).notNull(),
-  
-  // discountAmount: Umumiy summaga qilingan chegirma (masalan 5% -> 500,000)
-  discountAmount: decimal('discount_amount', { precision: 18, scale: 2 }).default('0'),
-  
-  // finalAmount: To'lanadigan summa (9,500,000)
   finalAmount: decimal('final_amount', { precision: 18, scale: 2 }).notNull(),
+
+  // 🔥 CHEGIRMA TARIXI (EDIT UCHUN MUHIM)
+  discountAmount: decimal('discount_amount', { precision: 18, scale: 2 }).default('0'), // Natija
+  discountValue: decimal('discount_value', { precision: 18, scale: 2 }).default('0'),   // Kiritilgan raqam (10 yoki 50000)
+  discountType: discountTypeEnum('discount_type').default('fixed'),                     // percent yoki fixed
 
   currency: currencyEnum('currency').default('UZS').notNull(),
   exchangeRate: decimal('exchange_rate', { precision: 10, scale: 2 }).default('1'),
 
   isPrinted: boolean('is_printed').default(false).notNull(),
-
   type: orderTypeEnum('type').default('retail'),
   status: orderStatusEnum('status').default('draft'),
   paymentMethod: paymentMethodEnum('payment_method').default('cash'),
@@ -183,7 +183,7 @@ export const orders = pgTable('orders', {
 }));
 
 // ---------------------------
-// 9. CHEK ELEMENTLARI - 🔥 2-TUR CHEGIRMA: BITTA ITEMGA
+// 9. ORDER ITEMS (Yangilandi: Manual Discount uchun)
 // ---------------------------
 export const orderItems = pgTable('order_items', {
   id: serial('id').primaryKey(),
@@ -192,44 +192,37 @@ export const orderItems = pgTable('order_items', {
   
   quantity: decimal('quantity', { precision: 10, scale: 2 }).notNull(),
   
-  // 🔥 MANUAL DISCOUNT UCHUN:
-  // originalPrice: Katalogdagi narxi (masalan 100,000)
-  originalPrice: decimal('original_price', { precision: 15, scale: 2 }).default('0').notNull(),
-  
-  // price: Haqiqiy sotilgan narxi (masalan 90,000). 
-  // Farqi = Chegirma
   price: decimal('price', { precision: 15, scale: 2 }).notNull(), 
+  originalPrice: decimal('original_price', { precision: 15, scale: 2 }).default('0').notNull(), 
   
-  totalPrice: decimal('total_price', { precision: 18, scale: 2 }).notNull(), // quantity * price
+  // 🔥 YANGI: Agar itemga alohida chegirma berilgan bo'lsa
+  manualDiscountValue: decimal('manual_discount_value', { precision: 15, scale: 2 }).default('0'),
+  manualDiscountType: discountTypeEnum('manual_discount_type').default('fixed'),
+
+  totalPrice: decimal('total_price', { precision: 18, scale: 2 }).notNull(), 
 });
 
 // ---------------------------
-// 10. 🔥 VOZVRAT (Refunds) - JAVOBGAR SHAXS BILAN
+// 10. REFUNDS
 // ---------------------------
 export const refunds = pgTable('refunds', {
   id: serial('id').primaryKey(),
-  orderId: integer('order_id').references(() => orders.id).notNull(), // Qaysi chek
-  
-  totalAmount: decimal('total_amount', { precision: 18, scale: 2 }).notNull(), // Qaytarilgan summa
-  
-  reason: text('reason'), // Nega qaytarildi?
-  
-  // 🔥 KIM QAYTARDI? (Owner yoki Admin ID bo'ladi)
-  refundedBy: integer('refunded_by').references(() => users.id).notNull(), 
-  
+  orderId: integer('order_id').references(() => orders.id).notNull(),
+  totalAmount: decimal('total_amount', { precision: 18, scale: 2 }).notNull(),
+  reason: text('reason'),
+  refundedBy: integer('refunded_by').references(() => users.id).notNull(),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
 // ---------------------------
-// 11. 🔥 VOZVRAT ITEMLAR
+// 11. REFUND ITEMS
 // ---------------------------
 export const refundItems = pgTable('refund_items', {
   id: serial('id').primaryKey(),
   refundId: integer('refund_id').references(() => refunds.id).notNull(),
   productId: integer('product_id').references(() => products.id).notNull(),
-  
-  quantity: decimal('quantity', { precision: 10, scale: 2 }).notNull(), // Qancha qaytdi
-  price: decimal('price', { precision: 15, scale: 2 }).notNull(), // Qanchadan hisoblandi (Sotilgan narxidan)
+  quantity: decimal('quantity', { precision: 10, scale: 2 }).notNull(),
+  price: decimal('price', { precision: 15, scale: 2 }).notNull(),
 });
 
 // ---------------------------
@@ -257,7 +250,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   sales: many(orders, { relationName: 'sellerOrders' }),
   cashierOrders: many(orders, { relationName: 'cashierOrders' }),
   addedStocks: many(stockHistory),
-  refundsProcessed: many(refunds), // User tasdiqlagan vozvratlar
+  refundsProcessed: many(refunds),
+}));
+
+export const attendanceRelations = relations(attendance, ({ one }) => ({
+  user: one(users, { fields: [attendance.userId], references: [users.id] }),
 }));
 
 export const productsRelations = relations(products, ({ one, many }) => ({
@@ -289,7 +286,7 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
 export const refundsRelations = relations(refunds, ({ one, many }) => ({
   order: one(orders, { fields: [refunds.orderId], references: [orders.id] }),
   items: many(refundItems),
-  refundedBy: one(users, { fields: [refunds.refundedBy], references: [users.id] }), // Mas'ul shaxs
+  refundedBy: one(users, { fields: [refunds.refundedBy], references: [users.id] }),
 }));
 
 export const refundItemsRelations = relations(refundItems, ({ one }) => ({

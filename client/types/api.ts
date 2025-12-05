@@ -139,9 +139,12 @@ export interface Order {
   customerName: string | null;
   
   // Summalar
-  totalAmount: string;    // Chegirmasiz jami
-  discountAmount: string; // Umumiy chegirma
+  totalAmount: string;    // Chegirmasiz jami// Umumiy chegirma
   finalAmount: string;    // To'langan summa
+
+  discountAmount: string;       // Natija (masalan "50000")
+  discountValue: string;        // Kiritilgan qiymat (masalan "10" yoki "50000")
+  discountType: 'percent' | 'fixed'; // Turi
   
   currency: 'UZS' | 'USD';
   exchangeRate: string;
