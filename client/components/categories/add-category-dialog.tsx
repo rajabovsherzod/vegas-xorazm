@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 
 const createCategorySchema = z.object({
-  name: z.string().min(2, "Nomi kamida 2 harf bo'lishi kerak"),
+  name: z.string().min(3, "Nomi kamida 3 harf bo'lishi kerak"),
   description: z.string().optional(),
 });
 

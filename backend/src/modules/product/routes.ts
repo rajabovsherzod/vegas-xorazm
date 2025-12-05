@@ -9,8 +9,6 @@ import {
 import { validate } from "@/middlewares/validate";
 import { sanitizeInput } from "@/middlewares/sanitize";
 import { createProductSchema, updateProductSchema, addStockSchema } from "./validation";
-// Agar addStock uchun alohida validatsiya schema bo'lmasa, shart emas, 
-// lekin quantity borligini tekshirish yaxshi bo'lar edi.
 
 const router = Router();
 
@@ -23,11 +21,7 @@ router.route("/")
     createProduct
   );
 
-// 🔥 MUHIM: Maxsus actionlar ID routidan oldin yoki alohida yozilishi kerak,
-// lekin bu yerda "/:id/stock" bo'lgani uchun "/:id" bilan konflikt qilmaydi.
-// Baribir tartibni saqlash yaxshi odat.
-
-// 2. STOCK QO'SHISH ROUTE (MANA SHU YETISHMAYOTGAN EDI)
+// 2. STOCK QO'SHISH (Maxsus action)
 router.post(
   "/:id/stock",
   sanitizeInput(),
@@ -35,9 +29,10 @@ router.post(
   addStock
 );
 
-// ID bo'yicha operatsiyalar
+// 3. ID BO'YICHA (UPDATE & DELETE)
 router.route("/:id")
-  .put(
+  // 🔥 O'ZGARISH SHU YERDA: .put() emas, .patch() bo'lishi kerak!
+  .patch(
     sanitizeInput({ skipFields: ['password'] }),
     validate(updateProductSchema),
     updateProduct

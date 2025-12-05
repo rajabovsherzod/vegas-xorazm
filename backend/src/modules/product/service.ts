@@ -3,7 +3,7 @@ import { products } from "@/db/schema";
 import { eq, desc, ilike, or, sql, SQL, and } from "drizzle-orm";
 import ApiError from "@/utils/ApiError";
 import logger from "@/utils/logger";
-import { getIO } from "@/socket"; // 🔌 SOCKET IMPORT
+import { getIO } from "@/socket"; 
 import { CreateProductInput, UpdateProductInput } from "./validation";
 
 export const productService = {
@@ -49,7 +49,7 @@ export const productService = {
     };
   },
 
-  // 2. CREATE (Yangi tovar xabari)
+  // 2. CREATE (TUZATILDI)
   create: async (payload: CreateProductInput) => {
     // Barcode mavjudligini tekshirish
     const existing = await db.query.products.findFirst({
@@ -59,14 +59,16 @@ export const productService = {
 
     const [newProduct] = await db.insert(products).values({
       ...payload,
+      // 🔥 Drizzle decimal uchun String kutadi
       price: String(payload.price),
       stock: String(payload.stock),
+      // 🔥 MUHIM: originalPrice ni ham Stringga o'tkazish kerak (agar mavjud bo'lsa)
+      originalPrice: payload.originalPrice ? String(payload.originalPrice) : null,
       categoryId: payload.categoryId ? Number(payload.categoryId) : null,
     }).returning();
 
     logger.info(`Mahsulot yaratildi. ID: ${newProduct.id}, Nom: ${newProduct.name}`);
 
-    // 🔥 SOCKET: Yangi tovar qo'shildi
     try {
       getIO().emit("new_product", newProduct);
     } catch (e) { console.error("Socket error:", e); }
@@ -85,14 +87,19 @@ export const productService = {
       }
     }
 
+    // Update uchun obyekt tayyorlash
+    const updateData: any = { ...payload };
+
+    // 🔥 Raqamlarni stringga o'tkazamiz
+    if (payload.price !== undefined) updateData.price = String(payload.price);
+    if (payload.stock !== undefined) updateData.stock = String(payload.stock);
+    if (payload.originalPrice !== undefined) updateData.originalPrice = String(payload.originalPrice);
+    
+    updateData.updatedAt = new Date();
+
     const [updatedProduct] = await db
       .update(products)
-      .set({
-        ...payload,
-        price: payload.price ? String(payload.price) : undefined,
-        stock: payload.stock ? String(payload.stock) : undefined,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(and(eq(products.id, id), eq(products.isDeleted, false)))
       .returning();
 
@@ -100,7 +107,6 @@ export const productService = {
 
     logger.info(`Mahsulot yangilandi. ID: ${id}`);
 
-    // 🔥 SOCKET: Narx yoki ma'lumot o'zgardi
     try {
       getIO().emit("product_update", updatedProduct);
     } catch (e) { console.error("Socket error:", e); }
@@ -108,7 +114,7 @@ export const productService = {
     return updatedProduct;
   },
 
-  // 4. SOFT DELETE (O'chirish xabari)
+  // 4. SOFT DELETE (O'zgarishsiz)
   delete: async (id: number) => {
     const [deleted] = await db
       .update(products)
@@ -123,7 +129,6 @@ export const productService = {
 
     logger.info(`Mahsulot o'chirildi (Soft Delete). ID: ${id}`);
 
-    // 🔥 SOCKET: Tovar ro'yxatdan olib tashlandi
     try {
       getIO().emit("product_delete", { id });
     } catch (e) { console.error("Socket error:", e); }
@@ -131,7 +136,7 @@ export const productService = {
     return deleted;
   },
 
-  // 5. ADD STOCK (Kirim qilish)
+  // 5. ADD STOCK (O'zgarishsiz)
   addStock: async (id: number, quantity: number, newPrice?: number) => {
     const product = await db.query.products.findFirst({
       where: eq(products.id, id)
@@ -147,7 +152,6 @@ export const productService = {
       updatedAt: new Date(),
     };
 
-    // Agar yangi narx berilgan bo'lsa, narxni ham yangilaymiz
     if (newPrice !== undefined && newPrice > 0) {
       updateData.price = String(newPrice);
     }
@@ -160,7 +164,6 @@ export const productService = {
 
     logger.info(`Mahsulot kirim qilindi. ID: ${id}, +${quantity}`);
 
-    // Socket notification
     try {
       getIO().emit("product_update", updatedProduct);
     } catch (e) { console.error("Socket error:", e); }
