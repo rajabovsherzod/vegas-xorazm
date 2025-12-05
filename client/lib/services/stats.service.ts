@@ -69,19 +69,3 @@ export const statsService = {
     return await api.get("/stats/owner");
   }
 };
-  
-  getOwnerStats: async (): Promise<OwnerStats> => {
-    return await api.get("/stats/owner");
-  }
-};
-
-  
-  getOwnerStats: async (): Promise<OwnerStats> => {
-    return await api.get("/stats/owner");
-  }
-};
-  
-  getOwnerStats: async (): Promise<OwnerStats> => {
-    return await api.get("/stats/owner");
-  }
-};
