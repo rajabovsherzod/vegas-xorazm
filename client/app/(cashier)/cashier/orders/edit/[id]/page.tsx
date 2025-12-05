@@ -66,7 +66,7 @@ export default function EditOrderPage() {
     return [];
   }, [productsResponse]);
 
-  // 🔥 1. DATA SYNC: SNAPSHOT + CATALOG RECOVERY
+  // 🔥 DATA SYNC: FAQAT ORDER ITEM NARXLARINI OLISH
   useEffect(() => {
     if (!order || products.length === 0 || !order.items) return;
     if (loadedOrderId === order.id) return;
@@ -90,45 +90,27 @@ export default function EditOrderPage() {
         
         const qty = Number(item.quantity);
         
-        // 1. SOTILGAN NARX (UZS da)
-        let soldPriceUZS = Number(item.price);          
-        
-        // 2. SNAPSHOT ASL NARX (UZS da)
-        let snapshotOriginalUZS = Number(item.originalPrice); 
+        let historySoldPrice = Number(item.price);          
+        let historyOriginalPrice = Number(item.originalPrice); 
 
-        // 3. CATALOG NARXI (Recovery uchun) - Agar snapshot 0 bo'lsa
-        let catalogPriceUZS = Number(originalProduct.price);
-        if (originalProduct.currency === 'USD') {
-            catalogPriceUZS = catalogPriceUZS * orderRate;
-        }
+        if (historyOriginalPrice === 0) historyOriginalPrice = historySoldPrice;
 
-        // 🔥 BETON MANTIQ:
-        // Agar Snapshot 0 bo'lsa, lekin Sotilgan narx < Katalog narx bo'lsa -> Katalog narxini olamiz.
-        // Agar Snapshot bor bo'lsa -> o'shani olamiz.
-        let finalOriginalUZS = snapshotOriginalUZS > 0 
-            ? snapshotOriginalUZS 
-            : Math.max(soldPriceUZS, catalogPriceUZS);
-
-        // 4. Endi hammasini mahsulot valyutasiga qaytaramiz (CartItem ishlashi uchun)
-        let displaySoldPrice = soldPriceUZS;
-        let displayOriginalPrice = finalOriginalUZS;
+        let displaySoldPrice = historySoldPrice;
+        let displayOriginalPrice = historyOriginalPrice;
 
         if (originalProduct.currency === 'USD') {
-            displaySoldPrice = soldPriceUZS / orderRate;
-            displayOriginalPrice = finalOriginalUZS / orderRate;
+            displaySoldPrice = historySoldPrice / orderRate;
+            displayOriginalPrice = historyOriginalPrice / orderRate;
         }
 
-        // 5. Product obyektini yasaymiz
+        // 🔥 BETON MANTIQ: KATALOG NARXINI IGNOR QILAMIZ
         let productForCart = { 
           ...originalProduct,
-          // Price -> Bu har doim ASL NARX bo'lishi kerak (Catalog yoki Snapshot)
           price: String(displayOriginalPrice), 
           originalPrice: String(displayOriginalPrice), 
-          
           discountPrice: null as string | null 
         };
         
-        // Agar sotilgan narx < Asl narx bo'lsa -> Chegirma bor
         if ((displayOriginalPrice - displaySoldPrice) > 0.01) {
             productForCart.discountPrice = String(displaySoldPrice);
         }
@@ -169,14 +151,26 @@ export default function EditOrderPage() {
   
       const payload = {
         items: validItems.map((item) => {
-          const sellingPrice = Number(item.product.discountPrice) > 0 
+          // 🔥 MUHIM O'ZGARISH: 
+          // Biz serverga "undefined" yubormaymiz!
+          // Biz savatda turgan narxni MAJBURLAB yuboramiz.
+          
+          // Agar discountPrice bo'lsa (9000), o'shani olamiz.
+          // Agar bo'lmasa, price (10000) ni olamiz.
+          // Bu narxlar biz yuqorida useEffectda ORDER TARIXIDAN tiklagan narxlar.
+          const actualPrice = Number(item.product.discountPrice) > 0 
                 ? Number(item.product.discountPrice) 
-                : undefined;
+                : Number(item.product.price);
           
           return {
             productId: item.product.id,
             quantity: String(item.quantity),
-            price: sellingPrice,
+            
+            // 🔥 MANA SHU YERDA PRODUCTGA ARALASHISH TO'XTATILADI
+            // Biz aniq raqam (masalan 30000) yuboryapmiz.
+            // Backend endi product tablega qarab o'tirmaydi.
+            price: actualPrice, 
+            
             manualDiscountValue: item.manualDiscountValue,
             manualDiscountType: item.manualDiscountType,
           };
@@ -250,7 +244,7 @@ export default function EditOrderPage() {
      return null;
   };
 
-  // 🔥 2. CALCULATIONS: ASL NARXLARNI TO'G'RI HISOBLASH
+  // 🔥 CALCULATIONS
   const { totalAmount, totalUSD, originalTotalAmount } = useMemo(() => {
     let usd = 0; 
     let uzs = 0; 
@@ -273,8 +267,7 @@ export default function EditOrderPage() {
         uzs += finalPrice * qty;
       }
 
-      // 2. ASL NARX (Original Price)
-      // useEffect da biz "originalPrice" ni to'g'irlab qo'yganmiz (Catalog yoki Snapshotdan)
+      // 2. ASL NARX
       let itemOriginal = parseFloat(product.originalPrice as string || "0");
       let itemBase = parseFloat(product.price as string || "0");
 
@@ -283,8 +276,6 @@ export default function EditOrderPage() {
         itemBase = itemBase * rate;
       }
 
-      // useEffect dagi logika bo'yicha itemBase yoki itemOriginal allaqachon to'g'ri bo'ladi.
-      // Lekin baribir tekshiramiz:
       const effectiveOriginal = itemOriginal > 0 ? itemOriginal : itemBase;
       originalUzs += (effectiveOriginal * qty);
     });
@@ -292,7 +283,7 @@ export default function EditOrderPage() {
     return { 
         totalAmount: uzs + (usd * rate), 
         totalUSD: usd,
-        originalTotalAmount: originalUzs // Endi bu yerda 539k chiqishi shart
+        originalTotalAmount: originalUzs 
     };
   }, [cart, exchangeRate]);
 
