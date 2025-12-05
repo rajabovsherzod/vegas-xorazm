@@ -42,7 +42,27 @@ export const addStockSchema = z.object({
   })
 });
 
+export const setDiscountSchema = z.object({
+  body: z.object({
+    // Foizda kiritishi mumkin (masalan 10%)
+    percent: z.number().min(1).max(100).optional(),
+    
+    // Yoki aniq summa (masalan 9000 so'm qilib qo'yish)
+    fixedPrice: z.number().min(0).optional(),
+    
+    // Qachondan (default: hozirdan)
+    startDate: z.string().or(z.date()).optional(),
+    
+    // Qachongacha (Majburiy)
+    endDate: z.string().or(z.date()),
+  }).refine((data) => data.percent || data.fixedPrice, {
+    message: "Foiz yoki aniq summa kiritilishi shart",
+    path: ["percent"],
+  }),
+});
+
 // Tiplarni export qilamiz
 export type CreateProductInput = z.infer<typeof createProductSchema>["body"];
 export type UpdateProductInput = z.infer<typeof updateProductSchema>["body"];
 export type AddStockInput = z.infer<typeof addStockSchema>["body"];
+export type SetDiscountInput = z.infer<typeof setDiscountSchema>["body"];

@@ -1,50 +1,22 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"; 
+import { Skeleton } from "@/components/ui/skeleton";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 export interface KPICardProps {
   title: string;
   value: number;
   format?: "currency" | "number" | "percent";
-  icon: React.ReactNode;
+  icon: React.ReactNode; 
   description?: string;
-  colorScheme?: "cyan" | "emerald" | "amber" | "rose" | "violet" | "blue";
   loading?: boolean;
   className?: string;
+  trend?: { 
+    value: number;
+    isPositive?: boolean;
+  };
 }
-
-const colorSchemes = {
-  cyan: {
-    border: "group-hover:border-cyan-500/50",
-    iconBg: "bg-cyan-50 dark:bg-cyan-950/30",
-    iconColor: "text-cyan-600 dark:text-cyan-400",
-  },
-  emerald: {
-    border: "group-hover:border-emerald-500/50",
-    iconBg: "bg-emerald-50 dark:bg-emerald-950/30",
-    iconColor: "text-emerald-600 dark:text-emerald-400",
-  },
-  amber: {
-    border: "group-hover:border-amber-500/50",
-    iconBg: "bg-amber-50 dark:bg-amber-950/30",
-    iconColor: "text-amber-600 dark:text-amber-400",
-  },
-  rose: {
-    border: "group-hover:border-rose-500/50",
-    iconBg: "bg-rose-50 dark:bg-rose-950/30",
-    iconColor: "text-rose-600 dark:text-rose-400",
-  },
-  violet: {
-    border: "group-hover:border-violet-500/50",
-    iconBg: "bg-violet-50 dark:bg-violet-950/30",
-    iconColor: "text-violet-600 dark:text-violet-400",
-  },
-  blue: {
-    border: "group-hover:border-blue-500/50",
-    iconBg: "bg-blue-50 dark:bg-blue-950/30",
-    iconColor: "text-blue-600 dark:text-blue-400",
-  },
-};
 
 export function KPICard({
   title,
@@ -52,59 +24,104 @@ export function KPICard({
   format = "number",
   icon,
   description,
-  colorScheme = "cyan",
   loading = false,
   className,
+  trend,
 }: KPICardProps) {
-  const colors = colorSchemes[colorScheme];
 
+  // Loading holati
   if (loading) {
     return (
-      <div className={cn("h-[120px] rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] p-6 animate-pulse shadow-md", className)}>
-        <div className="flex justify-between items-start">
-          <div className="space-y-3">
-            <div className="h-4 w-24 bg-gray-200 dark:bg-white/5 rounded" />
-            <div className="h-8 w-32 bg-gray-200 dark:bg-white/5 rounded" />
-          </div>
-          <div className="h-12 w-12 rounded-xl bg-gray-200 dark:bg-white/5" />
+      <div className={cn("h-[130px] rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] p-5 shadow-sm", className)}>
+        <div className="space-y-4">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-3 w-16" />
         </div>
       </div>
     );
   }
 
-  const formattedValue = new Intl.NumberFormat("uz-UZ").format(value);
+  // Raqamni formatlash (UZS so'zisiz, faqat raqam)
+  const formattedNumber = new Intl.NumberFormat("uz-UZ").format(value);
+
+  // Trend (O'sish/Kamayish)
+  const TrendIcon = trend?.isPositive ? TrendingUp : (trend?.value === 0 ? Minus : TrendingDown);
+  const trendColor = trend?.isPositive 
+    ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10" 
+    : "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10";
 
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#132326] p-6 transition-all duration-300 shadow-md hover:shadow-lg",
-        colors.border,
+        "group relative overflow-hidden", // Ikonkani kesish uchun shart
+        "bg-white dark:bg-[#132326]",
+        "border border-gray-200 dark:border-white/5",
+        "rounded-2xl", // Tizim standarti (rounded-[2rem] emas)
+        "p-5 sm:p-6",  // Mobilda kichikroq padding
+        "shadow-sm hover:shadow-md transition-all duration-300",
+        "hover:border-[#00B8D9]/40", // Hover bo'lganda border Feruz rangga kiradi
         className
       )}
     >
-      <div className="flex justify-between items-start">
-        <div className="flex flex-col justify-between h-full space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <div className="flex items-baseline gap-1.5">
-            <h3 className="text-3xl font-bold text-[#212B36] dark:text-white tracking-tight">
-              {formattedValue}
-            </h3>
-            {format === "currency" && (
-              <span className="text-sm font-semibold text-muted-foreground">UZS</span>
-            )}
-          </div>
+      {/* --- 1. WATERMARK ICON (Div borderlari yo'q qilindi) --- */}
+      {/* Absolute joylashuv: Burchakka taqalgan */}
+      <div className="absolute -top-4 -right-4 sm:-top-6 sm:-right-6 transition-transform duration-500 ease-out group-hover:scale-110 group-hover:-rotate-12 pointer-events-none select-none">
+         {/* Faqat rang va shaffoflik berilgan. 
+            Hech qanday background, shadow yoki border yo'q.
+            Faqat SVG ning o'zi ko'rinadi.
+         */}
+         <div className="text-[#00B8D9] opacity-[0.08] group-hover:opacity-[0.12] transition-opacity duration-300">
+           {/* SVG hajmi: Responsive */}
+           <div className="w-24 h-24 sm:w-28 sm:h-28 [&>svg]:w-full [&>svg]:h-full">
+             {icon}
+           </div>
+         </div>
+      </div>
+
+      {/* --- 2. CONTENT (Matnlar) --- */}
+      <div className="relative z-10 flex flex-col justify-between h-full space-y-3">
+        
+        {/* Title */}
+        <div>
+          <span className="text-[10px] sm:text-xs font-bold text-muted-foreground/80 uppercase tracking-widest">
+            {title}
+          </span>
+        </div>
+
+        {/* Value Section (Responsiv Text + Unit) */}
+        <div className="flex items-baseline gap-1.5 sm:gap-2">
+          {/* Asosiy Raqam (Katta, lekin responsive) */}
+          <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-[#212B36] dark:text-white tracking-tight leading-none truncate">
+            {formattedNumber}
+          </h3>
+          
+          {/* Unit (UZS yoki dona) - Kichikroq va chiroyli */}
+          <span className="text-xs sm:text-sm font-semibold text-muted-foreground/70 bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded-[4px] mb-0.5">
+            {format === "currency" ? "UZS" : "dona"}
+          </span>
+        </div>
+
+        {/* Footer: Trend va Description */}
+        <div className="flex items-center gap-2 h-5 min-w-0">
+          {trend ? (
+            <div className={cn("flex items-center gap-1 text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded-md shrink-0", trendColor)}>
+              <TrendIcon className="w-3 h-3" />
+              <span>{trend.value > 0 ? "+" : ""}{trend.value}%</span>
+            </div>
+          ) : (
+            // Layout sakramasligi uchun bo'sh joy
+            <div className="h-5" /> 
+          )}
+          
+          {/* Description (Agar joy yetmasa ... bo'lib qisqaradi) */}
           {description && (
-            <p className="text-xs font-medium text-muted-foreground/80 pt-1">{description}</p>
+            <span className="text-[10px] sm:text-xs font-medium text-muted-foreground/60 truncate">
+              {description}
+            </span>
           )}
         </div>
 
-        <div className={cn(
-          "flex items-center justify-center w-12 h-12 rounded-xl transition-colors duration-300",
-          colors.iconBg,
-          colors.iconColor
-        )}>
-          {icon}
-        </div>
       </div>
     </div>
   );

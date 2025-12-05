@@ -4,35 +4,34 @@ import {
   deleteProduct, 
   getProducts, 
   updateProduct, 
-  addStock 
+  addStock,
+  setDiscount,
+  removeDiscount
 } from "./controller";
 import { validate } from "@/middlewares/validate";
 import { sanitizeInput } from "@/middlewares/sanitize";
-import { createProductSchema, updateProductSchema, addStockSchema } from "./validation";
-// 🔥 MUHIM: protect middleware import qiling
+import { createProductSchema, updateProductSchema, addStockSchema, setDiscountSchema } from "./validation";
 import { protect, authorize } from "@/middlewares/auth"; 
 
 const router = Router();
 
+// 🔥 Hamma route'lar himoyalangan bo'lishi shart!
 router.use(protect); 
-// --- PUBLIC ROUTES (Login shart emas bo'lsa) ---
-// Agar mahsulotlarni hamma ko'rishi kerak bo'lsa, GET ni tashqarida qoldiring
+
+// 1. GET ALL (Faqat login qilganlar)
 router.get("/", getProducts);
 
-// --- PROTECTED ROUTES (Login SHART) ---
-// 🔥 MANA SHU YERDA 'protect' BO'LISHI KERAK
-// Shunda controllerda req.user.id paydo bo'ladi
-
-// Create Product
+// 2. CREATE (Faqat Owner va Admin, agar kerak bo'lsa)
+// Yoki Seller ham qila oladi desangiz, authorize ni olib tashlang
 router.post(
   "/",
-  // authorize('owner', 'admin'), // Agar kerak bo'lsa rol ham qo'shing
+  // authorize('owner', 'admin'), 
   sanitizeInput({ skipFields: ['password'] }),
   validate(createProductSchema),
   createProduct
 );
 
-// Stock qo'shish
+// 3. ADD STOCK (Kirim qilish)
 router.post(
   "/:id/stock",
   sanitizeInput(),
@@ -40,13 +39,29 @@ router.post(
   addStock
 );
 
-// Update & Delete
+// CHEGIRMA ROUTELARI (ID li routelardan oldin qo'yish shart emas, lekin tartib uchun yaxshi)
+router.post(
+  "/:id/discount",
+  sanitizeInput(),
+  validate(setDiscountSchema),
+  setDiscount
+);
+
+router.delete(
+  "/:id/discount",
+  removeDiscount
+);
+
+// 4. UPDATE & DELETE
 router.route("/:id")
   .patch(
     sanitizeInput({ skipFields: ['password'] }),
     validate(updateProductSchema),
     updateProduct
   )
-  .delete(deleteProduct);
+  .delete(
+    // authorize('owner', 'admin'), // O'chirishni cheklash mumkin
+    deleteProduct
+  );
 
 export default router;

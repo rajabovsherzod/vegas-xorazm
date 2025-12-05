@@ -1,26 +1,19 @@
 /**
- * API Types
- * 
- * Backend API bilan ishlash uchun barcha tiplar.
- * Bu faylda backend response va request tiplar aniqlanadi.
+ * API Types (Updated for "Beton" Schema)
+ * * Backend API bilan ishlash uchun barcha tiplar.
+ * Yangi Chegirma, Vozvrat va Stock History tizimlariga moslashtirildi.
  */
 
 // ============================================================================
 // BASE TYPES
 // ============================================================================
 
-/**
- * Standard API Response
- */
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data: T;
   message?: string;
 }
 
-/**
- * Paginated API Response
- */
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: {
@@ -36,21 +29,30 @@ export interface PaginatedResponse<T> {
 // ============================================================================
 
 export interface Product {
-  code: string;
   id: number;
   name: string;
   barcode: string;
-  price: string;
-  originalPrice: string | null;
+  categoryId: number | null;
+  category?: Category;
+  
+  // Narxlar (Backendda decimal -> string bo'lib keladi)
+  price: string;          // Hozirgi sotuv narxi (agar aksiya bo'lsa, aksiya narxi)
+  originalPrice: string | null; // Kelish narxi yoki asl narx
+  
+  // Chegirma ma'lumotlari
+  discountPrice: string | null;
+  discountStart: string | null; // ISO Date string
+  discountEnd: string | null;   // ISO Date string
+
   currency: 'UZS' | 'USD';
   stock: string;
   unit: string;
-  categoryId: number | null;
-  category?: Category;
+  image: string | null;
+  
   isActive: boolean;
   isDeleted: boolean;
-  createdAt: Date | string;
-  updatedAt: Date | string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateProductPayload {
@@ -64,7 +66,17 @@ export interface CreateProductPayload {
   categoryId?: number;
 }
 
-export interface UpdateProductPayload extends Partial<CreateProductPayload> { }
+export interface UpdateProductPayload extends Partial<Omit<CreateProductPayload, 'stock'>> {
+  // Stock bu yerdan o'zgarmaydi, faqat Add Stock orqali
+}
+
+// Chegirma belgilash uchun payload
+export interface SetDiscountPayload {
+  percent?: number;
+  fixedPrice?: number;
+  startDate?: string | Date;
+  endDate: string | Date;
+}
 
 // ============================================================================
 // CATEGORY TYPES
@@ -76,8 +88,8 @@ export interface Category {
   description: string | null;
   isActive: boolean;
   isDeleted: boolean;
-  createdAt: Date | string;
-  updatedAt: Date | string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateCategoryPayload {
@@ -91,7 +103,8 @@ export interface UpdateCategoryPayload extends Partial<CreateCategoryPayload> { 
 // ORDER TYPES
 // ============================================================================
 
-export type OrderStatus = 'draft' | 'completed' | 'cancelled';
+// 🔥 Yangi statuslar qo'shildi
+export type OrderStatus = 'draft' | 'completed' | 'cancelled' | 'fully_refunded' | 'partially_refunded';
 export type OrderType = 'retail' | 'wholesale';
 export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'debt';
 
@@ -100,33 +113,49 @@ export interface OrderItem {
   orderId: number;
   productId: number;
   product?: Product;
+  
   quantity: string;
-  price: string;
-  originalCurrency: 'UZS' | 'USD';
+  
+  // Narxlar
+  price: string;          // Sotilgan narxi (chegirma bilan bo'lishi mumkin)
+  originalPrice: string;  // Asl narxi (manual discountni hisoblash uchun)
   totalPrice: string;
-  createdAt: Date | string;
+  
+  createdAt?: string;
 }
 
 export interface Order {
   id: number;
+  
   sellerId: number;
   seller?: User;
+  
   cashierId: number | null;
   cashier?: User;
+  
   partnerId: number | null;
   partner?: Partner;
+  
   customerName: string | null;
-  totalAmount: string;
-  finalAmount: string;
+  
+  // Summalar
+  totalAmount: string;    // Chegirmasiz jami
+  discountAmount: string; // Umumiy chegirma
+  finalAmount: string;    // To'langan summa
+  
   currency: 'UZS' | 'USD';
   exchangeRate: string;
+  
   status: OrderStatus;
   isPrinted: boolean;
   type: OrderType;
   paymentMethod: PaymentMethod;
+  
   items?: OrderItem[];
-  createdAt: Date | string;
-  updatedAt: Date | string;
+  refunds?: Refund[]; // Shu orderga tegishli vozvratlar
+  
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateOrderPayload {
@@ -134,14 +163,81 @@ export interface CreateOrderPayload {
   type: OrderType;
   paymentMethod: PaymentMethod;
   exchangeRate: string;
+  // Umumiy chegirma (ixtiyoriy)
+  discountAmount?: number; 
   items: {
     productId: number;
     quantity: string;
+    // Manual narx (agar kassir narxni qo'lda o'zgartirsa)
+    customPrice?: number; 
   }[];
 }
 
 export interface UpdateOrderStatusPayload {
   status: OrderStatus;
+}
+
+// ============================================================================
+// REFUND TYPES (YANGI)
+// ============================================================================
+
+export interface Refund {
+  id: number;
+  orderId: number;
+  totalAmount: string;
+  reason: string | null;
+  refundedBy: number; // User ID
+  refundedByUser?: User; // Expand qilinganda
+  items?: RefundItem[];
+  createdAt: string;
+}
+
+export interface RefundItem {
+  id: number;
+  refundId: number;
+  productId: number;
+  product?: Product;
+  quantity: string;
+  price: string;
+}
+
+export interface CreateRefundPayload {
+  orderId: number;
+  reason?: string;
+  items: {
+    productId: number;
+    quantity: number; // Qancha qaytaryapti
+  }[];
+}
+
+// ============================================================================
+// STOCK HISTORY TYPES (YANGI)
+// ============================================================================
+
+export interface StockHistory {
+  id: number;
+  productId: number;
+  product?: Product;
+  quantity: string;
+  oldStock: string | null;
+  newStock: string | null;
+  newPrice: string | null;
+  
+  // AddedBy obyekt sifatida
+  addedBy: {
+    id: number;
+    fullName: string;
+    username: string;
+    role: UserRole;
+  } | null;
+  
+  note: string | null;
+  createdAt: string;
+}
+
+export interface AddStockPayload {
+  quantity: number;
+  newPrice?: number;
 }
 
 // ============================================================================
@@ -161,8 +257,8 @@ export interface User {
   workStartTime: string;
   isActive: boolean;
   isDeleted: boolean;
-  createdAt: Date | string;
-  updatedAt: Date | string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateUserPayload {
@@ -189,10 +285,11 @@ export interface Partner {
   name: string;
   phone: string | null;
   address: string | null;
+  balance: string;
   isActive: boolean;
   isDeleted: boolean;
-  createdAt: Date | string;
-  updatedAt: Date | string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ============================================================================
@@ -220,34 +317,12 @@ export interface DashboardStats {
   completedOrders: number;
   totalProducts: number;
   lowStockProducts: number;
+  // Refund statistikasi
+  totalRefunds?: number; 
+  refundedAmount?: number;
 }
 
-export interface DailySales {
-  date: string;
-  revenue: number;
-  count: number;
-}
-
-export interface TopProduct {
-  productId: number;
-  productName: string;
-  totalQuantity: number;
-  totalRevenue: number;
-}
-
-export interface TopSeller {
-  sellerId: number;
-  sellerName: string;
-  totalOrders: number;
-  totalRevenue: number;
-}
-
-export interface CategorySales {
-  categoryId: number;
-  categoryName: string;
-  totalRevenue: number;
-  percentage: number;
-}
+// ... Qolgan statistika tiplari o'zgarishsiz qolishi mumkin ...
 
 // ============================================================================
 // SOCKET TYPES
@@ -258,11 +333,11 @@ export interface SocketNewOrderEvent {
   sellerId: number;
   customerName: string | null;
   totalAmount: string;
-  createdAt: Date | string;
+  createdAt: string;
 }
 
 export interface SocketStockUpdateEvent {
-  action: 'add' | 'subtract';
+  action: 'add' | 'subtract' | 'refresh';
   items: {
     id: number;
     quantity: number;
@@ -274,6 +349,11 @@ export interface SocketOrderStatusChangeEvent {
   status: OrderStatus;
 }
 
-
-
-
+export interface SocketProductUpdateEvent {
+  id: number;
+  name: string;
+  price: string;
+  stock: string;
+  // Yangilangan chegirma info
+  discountPrice?: string;
+}

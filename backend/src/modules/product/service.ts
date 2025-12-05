@@ -1,10 +1,10 @@
 import { db } from "@/db";
-import { products, stockHistory } from "@/db/schema"; // stockHistory import qilindi
+import { products, stockHistory } from "@/db/schema";
 import { eq, desc, ilike, or, sql, SQL, and } from "drizzle-orm";
 import ApiError from "@/utils/ApiError";
 import logger from "@/utils/logger";
 import { getIO } from "@/socket"; 
-import { CreateProductInput, UpdateProductInput } from "./validation";
+import { CreateProductInput, UpdateProductInput, SetDiscountInput } from "./validation";
 
 export const productService = {
   // 1. GET ALL
@@ -52,14 +52,13 @@ export const productService = {
   // 2. CREATE (TRANSACTION BILAN)
   create: async (payload: CreateProductInput, userId?: number) => {
     return await db.transaction(async (tx) => {
-      // A) Barcode tekshirish
+      // Barcode tekshirish
       const existing = await tx.query.products.findFirst({
         where: eq(products.barcode, payload.barcode),
       });
       if (existing) throw new ApiError(400, "Bu shtrix-kod allaqachon mavjud!");
 
-      // B) Mahsulot yaratish
-      // 🔥 FIX: Numberlarni Stringga o'tkazamiz
+      // Mahsulot yaratish
       const [newProduct] = await tx.insert(products).values({
         ...payload,
         price: String(payload.price),
@@ -68,7 +67,7 @@ export const productService = {
         categoryId: payload.categoryId ? Number(payload.categoryId) : null,
       }).returning();
 
-      // C) Tarixga yozish (Agar boshlang'ich soni bo'lsa)
+      // Tarixga yozish (Agar boshlang'ich soni bo'lsa)
       if (Number(payload.stock) > 0) {
         await tx.insert(stockHistory).values({
           productId: newProduct.id,
@@ -90,9 +89,8 @@ export const productService = {
     });
   },
 
-  // 3. UPDATE (TUZATILDI)
+  // 3. UPDATE (Stock o'zgarishi taqiqlangan)
   update: async (id: number, payload: UpdateProductInput) => {
-    // A) Barcode tekshirish
     if (payload.barcode) {
       const existing = await db.query.products.findFirst({
         where: eq(products.barcode, payload.barcode),
@@ -102,13 +100,9 @@ export const productService = {
       }
     }
 
-    // B) Data tayyorlash
     const updateData: any = { ...payload };
+    delete updateData.stock; // 🔥 Stock faqat Add Stock orqali o'zgaradi
 
-    // 🔥 MUHIM: Edit orqali stockni o'zgartirishni taqiqlaymiz!
-    delete updateData.stock;
-
-    // 🔥 FIX: Numberlarni Stringga o'tkazamiz
     if (payload.price !== undefined) updateData.price = String(payload.price);
     if (payload.originalPrice !== undefined) updateData.originalPrice = String(payload.originalPrice);
     
@@ -126,6 +120,65 @@ export const productService = {
     try {
       getIO().emit("product_update", updatedProduct);
     } catch (e) { console.error("Socket error:", e); }
+
+    return updatedProduct;
+  },
+
+  setDiscount: async (id: number, payload: SetDiscountInput) => {
+    const product = await db.query.products.findFirst({
+      where: eq(products.id, id),
+    });
+
+    if (!product) throw new ApiError(404, "Mahsulot topilmadi");
+
+    const currentPrice = Number(product.price);
+    let newDiscountPrice = 0;
+
+    // A) Agar foiz berilgan bo'lsa (masalan 10%)
+    if (payload.percent) {
+      const discountAmount = currentPrice * (payload.percent / 100);
+      newDiscountPrice = currentPrice - discountAmount;
+    } 
+    // B) Agar aniq narx berilgan bo'lsa (masalan 9000)
+    else if (payload.fixedPrice) {
+      newDiscountPrice = payload.fixedPrice;
+    }
+
+    // Xavfsizlik: Chegirma narxi asl narxdan qimmat bo'lib ketmasin
+    if (newDiscountPrice >= currentPrice) {
+      throw new ApiError(400, "Chegirma narxi asl narxdan past bo'lishi kerak");
+    }
+
+    const [updatedProduct] = await db
+      .update(products)
+      .set({
+        discountPrice: String(newDiscountPrice),
+        discountStart: payload.startDate ? new Date(payload.startDate) : new Date(),
+        discountEnd: new Date(payload.endDate),
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, id))
+      .returning();
+
+    logger.info(`Chegirma qo'yildi. ID: ${id}, Yangi narx: ${newDiscountPrice}`);
+    
+    // Socket orqali hammaga (Kassirga) yangi narxni yuboramiz
+    try { getIO().emit("product_update", updatedProduct); } catch (e) {}
+
+    return updatedProduct;
+  },
+
+  removeDiscount: async (id: number) => {
+    const [updatedProduct] = await db
+      .update(products)
+      .set({
+        discountPrice: null,
+        discountStart: null,
+        discountEnd: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, id))
+      .returning();
 
     return updatedProduct;
   },
@@ -151,7 +204,7 @@ export const productService = {
     return deleted;
   },
 
-  // 5. ADD STOCK (TRANSACTION BILAN)
+  // 5. ADD STOCK (Kirim qilish + Tarix)
   addStock: async (id: number, quantity: number, newPrice?: number, userId?: number) => {
     return await db.transaction(async (tx) => {
       const product = await tx.query.products.findFirst({
@@ -164,22 +217,22 @@ export const productService = {
       const newStock = currentStock + quantity;
 
       const updateData: any = {
-        stock: String(newStock), // Stringga o'tkazish
+        stock: String(newStock),
         updatedAt: new Date(),
       };
 
       if (newPrice !== undefined && newPrice > 0) {
-        updateData.price = String(newPrice); // Stringga o'tkazish
+        updateData.price = String(newPrice);
       }
 
-      // A) Products jadvalini yangilash
+      // Products jadvalini yangilash
       const [updatedProduct] = await tx
         .update(products)
         .set(updateData)
         .where(eq(products.id, id))
         .returning();
 
-      // B) Tarixga yozish
+      // Tarixga yozish
       await tx.insert(stockHistory).values({
         productId: id,
         quantity: String(quantity),

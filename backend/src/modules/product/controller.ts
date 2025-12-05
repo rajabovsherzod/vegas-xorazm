@@ -10,7 +10,7 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json(new ApiResponse(200, result, "Mahsulotlar yuklandi"));
 });
 
-// 2. CREATE (User ID ni jo'natamiz)
+// 2. CREATE (User ID yuboriladi - Tarix uchun)
 export const createProduct = asyncHandler(async (req: AuthRequest, res: Response) => {
   const result = await productService.create(req.body, req.user?.id);
   res.status(201).json(new ApiResponse(201, result, "Mahsulot yaratildi"));
@@ -28,19 +28,26 @@ export const deleteProduct = asyncHandler(async (req: Request, res: Response) =>
   res.status(200).json(new ApiResponse(200, null, "Mahsulot o'chirildi"));
 });
 
-// 5. ADD STOCK (User ID ni jo'natamiz)
+// 5. ADD STOCK (User ID yuboriladi - Tarix uchun)
 export const addStock = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { quantity, newPrice } = req.body;
-  
-  // Debug uchun log tashlab ko'ring
-  console.log("User ID add Stock:", req.user?.id); 
-
   const result = await productService.addStock(
     Number(req.params.id), 
     Number(quantity), 
     newPrice ? Number(newPrice) : undefined,
-    req.user?.id // <--- Agar protect bo'lmasa, bu undefined bo'ladi
+    req.user?.id 
   );
-  
   res.status(200).json(new ApiResponse(200, result, "Mahsulot kirim qilindi"));
+});
+
+// 6. CHEGIRMA BELGILASH
+export const setDiscount = asyncHandler(async (req: Request, res: Response) => {
+  const result = await productService.setDiscount(Number(req.params.id), req.body);
+  res.status(200).json(new ApiResponse(200, result, "Chegirma belgilandi"));
+});
+
+// 7. CHEGIRMANI OLIB TASHLASH
+export const removeDiscount = asyncHandler(async (req: Request, res: Response) => {
+  const result = await productService.removeDiscount(Number(req.params.id));
+  res.status(200).json(new ApiResponse(200, result, "Chegirma olib tashlandi"));
 });
