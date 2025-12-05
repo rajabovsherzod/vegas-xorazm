@@ -272,13 +272,27 @@ export const orderService = {
       if (userRole === 'seller' && order.sellerId !== userId) throw new ApiError(403, "Ruxsat yo'q");
 
       const stockChanges: { id: number; quantity: number; action: 'add' | 'subtract' }[] = [];
+      const oldItemsMap = new Map(order.items.map(item => [item.productId, Number(item.quantity)]));
+      const newItemsMap = new Map(payload.items.map(item => [item.productId, Number(item.quantity)]));
 
-      // 2. ESKI ITEMLARNI QAYTARISH (Stock Rollback)
-      for (const oldItem of order.items) {
-        await tx.execute(
-          sql`UPDATE products SET stock = stock + ${oldItem.quantity} WHERE id = ${oldItem.productId}`
-        );
-        stockChanges.push({ id: oldItem.productId, quantity: Number(oldItem.quantity), action: 'add' });
+      // 2. STOCK O'ZGARISHLARINI HISOBLASH
+      const allProductIds = new Set([...oldItemsMap.keys(), ...newItemsMap.keys()]);
+
+      for (const productId of allProductIds) {
+        const oldQty = oldItemsMap.get(productId) || 0;
+        const newQty = newItemsMap.get(productId) || 0;
+        const diff = newQty - oldQty;
+
+        if (diff === 0) continue; // O'zgarish yo'q
+
+        if (diff > 0) { // Mahsulot soni oshdi (ombordan yechish kerak)
+          await tx.execute(sql`UPDATE products SET stock = stock - ${diff} WHERE id = ${productId}`);
+          stockChanges.push({ id: productId, quantity: diff, action: 'subtract' });
+        } else { // Mahsulot soni kamaydi (omborga qaytarish kerak)
+          const returnQty = Math.abs(diff);
+          await tx.execute(sql`UPDATE products SET stock = stock + ${returnQty} WHERE id = ${productId}`);
+          stockChanges.push({ id: productId, quantity: returnQty, action: 'add' });
+        }
       }
 
       // Eski itemsni o'chirish
@@ -302,13 +316,12 @@ export const orderService = {
         const currentStock = Number(product.stock); 
         const requestQty = Number(newItem.quantity);
 
-        if (currentStock < requestQty) throw new ApiError(409, `Yetarli emas: ${product.name}`);
-
-        await tx.update(products)
-          .set({ stock: String(currentStock - requestQty), updatedAt: new Date() })
-          .where(eq(products.id, product.id));
-
-        stockChanges.push({ id: product.id, quantity: requestQty, action: 'subtract' });
+        // Stock tekshiruvi yuqorida, diff orqali qilingan.
+        // Bu yerda qayta tekshirish va o'zgartirish shart emas.
+        const productStock = (await tx.query.products.findFirst({ where: eq(products.id, product.id) }))?.stock || '0';
+        if (Number(productStock) < 0) {
+            throw new ApiError(409, `Omborda yetarli emas: ${product.name}`);
+        }
 
         // Narx Mantiqi
         const originalPrice = Number(product.price);
@@ -389,7 +402,11 @@ export const orderService = {
       try {
         const io = getIO();
         io.to("admin_room").emit("order_updated", { id: orderId, updatedBy: userId, totalAmount: updatedOrder.totalAmount });
-        io.emit("stock_update", { action: "refresh", items: stockChanges });
+        
+        // TODO: Bu xabar keraksiz toastlarga sabab bo'lmoqda. Vaqtincha o'chirildi.
+        // if (stockChanges.length > 0) {
+        //   io.to("admin_room").emit("stock_update", { action: "refresh", items: stockChanges });
+        // }
       } catch (e) { logger.error(e); }
 
       return updatedOrder;

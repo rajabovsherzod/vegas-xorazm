@@ -64,48 +64,31 @@ export function SocketProvider({ children }: SocketProviderProps) {
     socket.on("new_order", (data: any) => {
       console.log("📦 Yangi order keldi:", data);
 
-      // Orders ro'yxatini yangilash
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-
-      // Dashboard statsni yangilash
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
 
-      // Toast xabari
-      toast.success(`Yangi buyurtma #${data.id}`, {
+      // Muvaffaqiyatli yangi order haqida aniq xabar
+      toast.success(`Yangi buyurtma #${data.id} qabul qilindi`, {
         description: `${data.customerName || "Mijoz"} - ${new Intl.NumberFormat("uz-UZ").format(Number(data.totalAmount))} UZS`,
       });
     });
 
     // 🔥 OMBOR YANGILANDI
     socket.on("stock_update", (data: { action: "add" | "subtract"; items: { id: number; quantity: number }[] }) => {
-      console.log("📊 Ombor yangilandi:", data);
-
-      // Mahsulotlar ro'yxatini yangilash
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-
-      if (data.action === "subtract") {
-        toast.info("Ombor yangilandi", {
-          description: `${data.items.length} ta mahsulot miqdori kamaydi`,
-        });
-      } else {
-        toast.info("Ombor yangilandi", {
-          description: `${data.items.length} ta mahsulot qaytarildi`,
-        });
-      }
+      // ✅ FAQQAT QUERY INVALIDATE QILINADI, ORTIQCHA TOAST YUQ
+      console.log("📊 Ombor yangilanishi signali keldi");
+      queryClient.invalidateQueries({ queryKey: ["products"] }); 
     });
 
     // 🔥 ORDER STATUS O'ZGARDI
     socket.on("order_status_change", (data: { id: number; status: string }) => {
       console.log("✅ Order status o'zgardi:", data);
 
-      // Orders ro'yxatini yangilash
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["seller-orders"] });
-
-      // Dashboard statsni yangilash
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
 
-      // Toast xabari
+      // Toza status xabarlari
       if (data.status === "completed") {
         toast.success(`Buyurtma #${data.id} tasdiqlandi`);
       } else if (data.status === "cancelled") {
@@ -127,7 +110,3 @@ export function SocketProvider({ children }: SocketProviderProps) {
     </SocketContext.Provider>
   );
 }
-
-
-
-

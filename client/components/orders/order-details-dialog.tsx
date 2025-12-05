@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,7 @@ import {
   Loader2,
   Eye,
   Tag,
+  ArrowDownCircle
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +69,31 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: OrderDetailsDi
     }
   }, [open, qzTrayLoaded]);
 
+  // 🔥 1. MATEMATIKA (CHEK BILAN BIR XIL LOGIKA)
+  const { realOriginalTotal, finalPayable, totalSaved } = useMemo(() => {
+    if (!order) return { realOriginalTotal: 0, finalPayable: 0, totalSaved: 0 };
+
+    // 1. To'lanadigan yakuniy summa (Baza aniq beradi)
+    const finalAmount = Number(order.finalAmount);
+
+    // 2. Real Original Summa (Tovarlarning ASL narxlari yig'indisi)
+    const originalTotal = order.items?.reduce((acc, item) => {
+      // Agar originalPrice 0 yoki null bo'lsa, demak chegirma yo'q, oddiy price olinadi
+      const originalPrice = Number(item.originalPrice) > 0 ? Number(item.originalPrice) : Number(item.price);
+      return acc + (Number(item.quantity) * originalPrice);
+    }, 0);
+
+    // 3. Jami tejalgan summa (Chekdagidek: Asl narx - To'langan narx)
+    // Bu yerda promo-aksiya, kassa chegirmasi va manual chegirma hammasi ichida ketadi.
+    const saved = (originalTotal || 0) - finalAmount;
+
+    return {
+      realOriginalTotal: originalTotal || 0,
+      finalPayable: finalAmount,
+      totalSaved: saved
+    };
+  }, [order]);
+
   if (!order) return null;
 
   const payment = paymentMethodMap[order.paymentMethod] || paymentMethodMap.cash;
@@ -88,12 +114,6 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: OrderDetailsDi
       setIsPrinting(false);
     }
   };
-
-  // 🔥 GLOBAL HISOBLAR
-  // Bazadan hamma narsa UZS da (String) keladi
-  const totalAmount = Number(order.totalAmount); // Chegirmasiz jami (UZS)
-  const discountAmount = Number(order.discountAmount || 0); // Jami chegirma (UZS)
-  const finalAmount = Number(order.finalAmount); // To'lanadigan (UZS)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -173,12 +193,6 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: OrderDetailsDi
             
             <div className="space-y-2.5 overflow-y-auto max-h-[300px] pr-2 flex-1 custom-scrollbar">
               {order.items?.map((item: any, index: number) => {
-                // 🔥 VALYUTA VA NARX LOGIKASI
-                // item.price -> BAZADA UZS da saqlangan (Sotilgan narx)
-                // item.originalPrice -> BAZADA UZS da saqlangan (Asl narx)
-                // item.product.currency -> 'USD' bo'lishi mumkin
-                // order.exchangeRate -> Kurs
-
                 const isUSD = item.product?.currency === 'USD';
                 const rate = Number(order.exchangeRate) || 1;
                 const quantity = Number(item.quantity);
@@ -186,18 +200,17 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: OrderDetailsDi
 
                 // Asl narxlar (UZS)
                 const soldPriceUZS = Number(item.price);
-                const originalPriceUZS = Number(item.originalPrice);
+                const originalPriceUZS = Number(item.originalPrice) > 0 ? Number(item.originalPrice) : soldPriceUZS;
 
-                // Chegirma bormi?
+                // Chegirma bormi? (Sotilgan narx < Asl narx)
                 const hasItemDiscount = soldPriceUZS < originalPriceUZS;
 
-                // Ko'rsatish uchun narxlar (Agar USD bo'lsa, dollarga qaytaramiz)
+                // Ko'rsatish uchun narxlar
                 const displaySoldPrice = isUSD ? soldPriceUZS / rate : soldPriceUZS;
                 const displayOriginalPrice = isUSD ? originalPriceUZS / rate : originalPriceUZS;
 
                 return (
                   <div key={index} className="flex justify-between items-start gap-3 border-b border-gray-200 dark:border-white/10 pb-2.5 last:border-0 last:pb-0">
-                    {/* Chap: Nom va Narx */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm text-[#212B36] dark:text-white mb-1 line-clamp-1">
                         {item.product?.name || "Mahsulot"}
@@ -206,7 +219,6 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: OrderDetailsDi
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                          <span>{quantity} x</span>
                          
-                         {/* Narxni ko'rsatish */}
                          {hasItemDiscount ? (
                             <>
                                <span className="line-through decoration-rose-500/50 decoration-1 text-gray-400">
@@ -215,6 +227,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: OrderDetailsDi
                                <span className="font-bold text-[#00B8D9]">
                                    {isUSD ? `$${displaySoldPrice.toFixed(2)}` : formatCurrency(displaySoldPrice, "UZS")}
                                </span>
+                               
                                {/* Manual Discount Badge */}
                                {item.manualDiscountValue && Number(item.manualDiscountValue) > 0 && (
                                    <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1 py-0.5 rounded text-[9px] font-bold">
@@ -230,12 +243,10 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: OrderDetailsDi
                       </div>
                     </div>
 
-                    {/* O'ng: Jami (Har doim UZS da ko'rsatgan ma'qul yoki konvertatsiya qilinganini) */}
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-[#212B36] dark:text-white whitespace-nowrap">
                         {formatCurrency(itemTotalUZS, "UZS")}
                       </p>
-                      {/* Agar USD bo'lsa, tagiga kichik qilib dollarda ham yozib qo'yamiz */}
                       {isUSD && (
                           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
                               ${(itemTotalUZS / rate).toFixed(2)}
@@ -247,31 +258,35 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: OrderDetailsDi
               })}
             </div>
             
-            {/* FOOTER: TOTALS */}
-            <div className="mt-4 pt-3 border-t border-dashed border-gray-300 dark:border-white/20 space-y-1">
-                {/* Subtotal */}
+            {/* 🔥 FOOTER: ANIQ MATEMATIKA */}
+            <div className="mt-4 pt-3 border-t border-dashed border-gray-300 dark:border-white/20 space-y-2">
+                
+                {/* 1. ASL NARXLAR YIG'INDISI (Agar chegirma bo'lsa line-through bo'ladi) */}
                 <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Jami qiymat:</span>
-                    <span>{formatCurrency(totalAmount, "UZS")}</span>
+                    <span>Jami qiymat (Asl narxlar):</span>
+                    <span className={cn(totalSaved > 0 && "line-through decoration-rose-500/50 decoration-1")}>
+                      {formatCurrency(realOriginalTotal, "UZS")}
+                    </span>
                 </div>
                 
-                {/* Discount */}
-                {discountAmount > 0 && (
-                    <div className="flex justify-between text-xs font-medium text-amber-600 dark:text-amber-400">
-                        <span className="flex items-center gap-1">
-                            <Tag className="w-3 h-3" /> 
-                            Chegirma 
-                            {order.discountType === 'percent' && ` (${Number(order.discountValue)}%)`}
-                        :</span>
-                        <span>-{formatCurrency(discountAmount, "UZS")}</span>
+                {/* 2. JAMI TEJALGAN SUMMA */}
+                {totalSaved > 0 && (
+                    <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/20 px-2 py-1.5 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                            <ArrowDownCircle className="w-3.5 h-3.5" /> 
+                            Tejaldi:
+                        </span>
+                        <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                          -{formatCurrency(totalSaved, "UZS")}
+                        </span>
                     </div>
                 )}
 
-                {/* Final Total */}
-                <div className="flex justify-between items-end pt-2">
+                {/* 3. TO'LANADIGAN SUMMA */}
+                <div className="flex justify-between items-end pt-2 border-t border-gray-100 dark:border-white/10">
                     <span className="font-bold text-sm text-[#212B36] dark:text-white">To'lanadigan summa:</span>
                     <span className="text-xl font-extrabold text-[#00B8D9]">
-                        {formatCurrency(finalAmount, "UZS")}
+                        {formatCurrency(finalPayable, "UZS")}
                     </span>
                 </div>
             </div>
