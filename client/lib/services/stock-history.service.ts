@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/api-client";
-import { PaginatedResponse, Product } from "@/types/api";
+import { Product } from "@/types/api";
 
 export interface StockHistory {
   id: number;
@@ -9,8 +9,17 @@ export interface StockHistory {
   oldStock: string | null;
   newStock: string | null;
   newPrice: string | null;
-  addedBy: number | null;
-  admin: { fullName: string; username: string } | null;
+  
+  // 🔥 O'ZGARISH SHU YERDA:
+  // Oldin: addedBy: number | null;
+  // Hozir (Beton):
+  addedBy: {
+    id: number;
+    fullName: string;
+    username: string;
+    role?: string;
+  } | null;
+
   note: string | null;
   createdAt: string;
 }
@@ -25,9 +34,3 @@ export const stockHistoryService = {
     return await api.get(`/stock-history?${searchParams.toString()}`);
   }
 };
-
-
-
-
-
-

@@ -182,6 +182,23 @@ export const orderItems = pgTable('order_items', {
   totalPrice: decimal('total_price', { precision: 18, scale: 2 }).notNull(),
 });
 
+// 10. STOCK HISTORY (Kirimlar tarixi)
+// ---------------------------
+export const stockHistory = pgTable('stock_history', {
+  id: serial('id').primaryKey(),
+  productId: integer('product_id').references(() => products.id).notNull(),
+  quantity: decimal('quantity', { precision: 10, scale: 2 }).notNull(),
+  oldStock: decimal('old_stock', { precision: 10, scale: 2 }),
+  newStock: decimal('new_stock', { precision: 10, scale: 2 }),
+  newPrice: decimal('new_price', { precision: 15, scale: 2 }),
+  
+  // DB ustuni: added_by
+  addedBy: integer('added_by').references(() => users.id), 
+  
+  note: text('note'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // --- RELATIONS ---
 export const usersRelations = relations(users, ({ many }) => ({
   attendances: many(attendance),
@@ -212,22 +229,21 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   product: one(products, { fields: [orderItems.productId], references: [products.id] }),
 }));
 
-// 10. STOCK HISTORY (Kirimlar tarixi)
-// ---------------------------
-export const stockHistory = pgTable('stock_history', {
-  id: serial('id').primaryKey(),
-  productId: integer('product_id').references(() => products.id).notNull(),
-  quantity: decimal('quantity', { precision: 10, scale: 2 }).notNull(),
-  oldStock: decimal('old_stock', { precision: 10, scale: 2 }),
-  newStock: decimal('new_stock', { precision: 10, scale: 2 }),
-  newPrice: decimal('new_price', { precision: 15, scale: 2 }),
-  addedBy: integer('added_by').references(() => users.id),
-  note: text('note'),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => ({
-  productIdx: index('stock_history_product_idx').on(table.productId),
-  createdAtIdx: index('stock_history_created_at_idx').on(table.createdAt),
+export const stockHistoryRelations = relations(stockHistory, ({ one }) => ({
+  product: one(products, {
+    fields: [stockHistory.productId],
+    references: [products.id],
+  }),
+  
+  // 🔥 BETON QISM: Relation nomini 'addedBy' qo'yamiz.
+  // Bu 'users' jadvaliga bog'lanadi.
+  addedBy: one(users, {
+    fields: [stockHistory.addedBy],
+    references: [users.id],
+  }),
 }));
+
+
 
 // ---------------------------
 // 11. ERROR LOGS (Frontend xatoliklari)

@@ -17,15 +17,16 @@ export const stockHistoryService = {
         conditions.push(lte(stockHistory.createdAt, new Date(endDate)));
     }
 
+    // 🔥 FIX: 'admin' EMAS, 'addedBy' ishlatamiz (Schemaga moslab)
     const data = await db.query.stockHistory.findMany({
       where: and(...conditions),
       limit: limitNum,
       offset: offsetNum,
       orderBy: desc(stockHistory.createdAt),
       with: {
-        product: true,
-        admin: {
-            columns: { fullName: true, username: true }
+        product: true, 
+        addedBy: { // <-- User ma'lumotlarini olish
+            columns: { fullName: true, username: true, role: true }
         }
       }
     });

@@ -1462,3 +1462,4 @@ Agar barcha testlar muvaffaqiyatli bo'lsa:
 
 
 
+

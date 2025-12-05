@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { Resolver, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Package, Barcode, Cuboid, Layers, Loader2, DollarSign } from "lucide-react";
+import { Package, Barcode, Cuboid, Layers, Loader2, DollarSign, Lock } from "lucide-react";
 import * as z from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { productService } from "@/lib/services/product.service";
@@ -20,16 +20,22 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-// SCHEMA: Frontend uchun (Backend validation bilan bir xil mantiqda)
+// SCHEMA: Edit paytida Stock kerak emas, lekin formda ko'rsatish uchun qoldiramiz
 const editProductSchema = z.object({
   name: z.string().min(2, "Nomi kamida 2 harf bo'lishi kerak"),
   barcode: z.string().min(1, "Barkod kiritish majburiy"),
-  // coerce.number() avtomatik stringni numberga o'tkazadi
   price: z.coerce.number().min(0, "Narx manfiy bo'lishi mumkin emas"),
   originalPrice: z.coerce.number().optional(),
   currency: z.enum(["UZS", "USD"]).default("UZS"),
-  stock: z.coerce.number().min(0, "Soni manfiy bo'lishi mumkin emas"),
+  // stock endi backendga yuborilmaydi, faqat ko'rish uchun
+  stock: z.coerce.number().optional(), 
   unit: z.string().default("dona"),
   categoryId: z.coerce.number().optional(),
 });
@@ -76,14 +82,17 @@ export function EditProductDialog({ product, open, onOpenChange, categories = []
   }, [product, open, form]);
 
   const updateMutation = useMutation({
-    mutationFn: (data: EditProductFormValues) => productService.update(product.id, data),
+    mutationFn: (data: EditProductFormValues) => {
+      // Backendga stockni jo'natmaymiz!
+      const { stock, ...payload } = data;
+      return productService.update(product.id, payload);
+    },
     onSuccess: () => {
       toast.success("Mahsulot yangilandi");
       queryClient.invalidateQueries({ queryKey: ["products"] });
       onOpenChange(false);
     },
     onError: (error: any) => {
-      // Backenddan kelgan aniq xatoni ko'rsatish
       const msg = error?.response?.data?.message || error?.message || "Xatolik yuz berdi";
       toast.error(msg);
     },
@@ -132,7 +141,11 @@ export function EditProductDialog({ product, open, onOpenChange, categories = []
                           <FormControl>
                             <div className="relative">
                                 <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <Input placeholder="Coca Cola 1.5L" {...field} className="pl-10 h-11 bg-white dark:bg-black/20 rounded-xl" />
+                                <Input 
+                                  placeholder="Coca Cola 1.5L" 
+                                  {...field} 
+                                  className="pl-10 h-11 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-[#00B8D9]/20 focus:border-[#00B8D9] rounded-xl font-medium" 
+                                />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -151,7 +164,11 @@ export function EditProductDialog({ product, open, onOpenChange, categories = []
                           <FormControl>
                             <div className="relative">
                                 <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <Input placeholder="1234567890" {...field} className="pl-10 h-11 bg-white dark:bg-black/20 rounded-xl" />
+                                <Input 
+                                  placeholder="1234567890" 
+                                  {...field} 
+                                  className="pl-10 h-11 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-[#00B8D9]/20 focus:border-[#00B8D9] rounded-xl font-medium" 
+                                />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -159,18 +176,37 @@ export function EditProductDialog({ product, open, onOpenChange, categories = []
                       )}
                     />
                     
+                    {/* 🔥 STOCK FIELD: DISABLED */}
                     <FormField
                       control={form.control}
                       name="stock"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-sm font-medium">Soni (Omborda)</FormLabel>
+                          <FormLabel className="text-sm font-medium flex items-center gap-1">
+                            Soni (Omborda) 
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Lock className="w-3 h-3 text-muted-foreground cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Miqdorni o'zgartirish uchun "Kirim Qilish" funksiyasidan foydalaning</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </FormLabel>
                           <FormControl>
                              <div className="relative">
                                 <Cuboid className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <Input type="number" {...field} className="pl-10 h-11 bg-white dark:bg-black/20 rounded-xl" />
+                                <Input 
+                                  type="number" 
+                                  {...field} 
+                                  disabled 
+                                  className="pl-10 h-11 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-muted-foreground cursor-not-allowed rounded-xl font-medium" 
+                                />
                              </div>
                           </FormControl>
+                          <p className="text-[10px] text-muted-foreground">O'zgartirish imkonsiz</p>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -185,14 +221,14 @@ export function EditProductDialog({ product, open, onOpenChange, categories = []
                        <FormLabel className="text-sm font-medium">Kategoriya</FormLabel>
                        <Select onValueChange={(value) => field.onChange(Number(value))} value={field.value?.toString()}>
                          <FormControl>
-                           <SelectTrigger className="h-11 bg-white dark:bg-black/20 rounded-xl">
+                           <SelectTrigger className="h-11 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-[#00B8D9]/20 focus:border-[#00B8D9] rounded-xl font-medium">
                              <div className="flex items-center gap-2">
                                <Layers className="w-4 h-4 text-[#00B8D9]" />
                                <SelectValue placeholder="Kategoriyani tanlang" />
                              </div>
                            </SelectTrigger>
                          </FormControl>
-                         <SelectContent>
+                         <SelectContent className="bg-white dark:bg-[#1C2C30] border-gray-100 dark:border-white/10 z-[9999]">
                            {categories.map((category: any) => (
                              <SelectItem key={category.id} value={category.id.toString()}>
                                {category.name}
@@ -214,18 +250,18 @@ export function EditProductDialog({ product, open, onOpenChange, categories = []
                     <div className="p-1.5 bg-[#00B8D9]/10 rounded-lg">
                         <DollarSign className="w-4 h-4 text-[#00B8D9]" />
                     </div>
-                    <span className="text-sm font-bold">Narx Siyosati</span>
+                    <span className="text-sm font-bold text-gray-700 dark:text-white">Narx Siyosati</span>
                  </div>
                  
                  <div className="grid grid-cols-3 gap-3">
-                    <FormField
+                 <FormField
                       control={form.control}
-                      name="price"
+                      name="originalPrice"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-[11px] font-semibold text-muted-foreground uppercase">Sotuv</FormLabel>
+                          <FormLabel className="text-[11px] font-semibold text-muted-foreground uppercase">Kelish</FormLabel>
                           <FormControl>
-                            <Input type="number" {...field} className="h-10 bg-white dark:bg-[#1C2C30] rounded-lg text-sm" />
+                            <Input type="number" {...field} className="h-10 bg-white dark:bg-[#1C2C30] border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-[#00B8D9]/20 focus:border-[#00B8D9] rounded-lg text-sm" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -233,12 +269,12 @@ export function EditProductDialog({ product, open, onOpenChange, categories = []
                     />
                     <FormField
                       control={form.control}
-                      name="originalPrice"
+                      name="price"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-[11px] font-semibold text-muted-foreground uppercase">Kelish</FormLabel>
+                          <FormLabel className="text-[11px] font-semibold text-muted-foreground uppercase">Sotuv</FormLabel>
                           <FormControl>
-                            <Input type="number" {...field} className="h-10 bg-white dark:bg-[#1C2C30] rounded-lg text-sm" />
+                            <Input type="number" {...field} className="h-10 bg-white dark:bg-[#1C2C30] border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-[#00B8D9]/20 focus:border-[#00B8D9] rounded-lg text-sm" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -252,11 +288,11 @@ export function EditProductDialog({ product, open, onOpenChange, categories = []
                           <FormLabel className="text-[11px] font-semibold text-muted-foreground uppercase">Valyuta</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger className="h-10 bg-white dark:bg-[#1C2C30] rounded-lg text-sm">
+                              <SelectTrigger className="h-10 bg-white dark:bg-[#1C2C30] border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-[#00B8D9]/20 focus:border-[#00B8D9] rounded-lg text-sm">
                                 <SelectValue placeholder="Valyuta" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="bg-white dark:bg-[#1C2C30] border-gray-100 dark:border-white/10 z-[9999]">
                                 <SelectItem value="UZS">UZS</SelectItem>
                                 <SelectItem value="USD">USD</SelectItem>
                             </SelectContent>
@@ -270,7 +306,7 @@ export function EditProductDialog({ product, open, onOpenChange, categories = []
 
               {/* FOOTER */}
               <div className="flex justify-end gap-3 pt-2">
-                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="h-11 rounded-xl">
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="h-11 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 font-semibold">
                     Bekor qilish
                 </Button>
                 <Button 

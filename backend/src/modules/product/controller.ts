@@ -10,13 +10,13 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json(new ApiResponse(200, result, "Mahsulotlar yuklandi"));
 });
 
-// 2. CREATE
-export const createProduct = asyncHandler(async (req: Request, res: Response) => {
-  const result = await productService.create(req.body);
+// 2. CREATE (User ID ni jo'natamiz)
+export const createProduct = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const result = await productService.create(req.body, req.user?.id);
   res.status(201).json(new ApiResponse(201, result, "Mahsulot yaratildi"));
 });
 
-// 3. UPDATE (YANGI QO'SHILDI)
+// 3. UPDATE
 export const updateProduct = asyncHandler(async (req: Request, res: Response) => {
   const result = await productService.update(Number(req.params.id), req.body);
   res.status(200).json(new ApiResponse(200, result, "Mahsulot yangilandi"));
@@ -28,9 +28,14 @@ export const deleteProduct = asyncHandler(async (req: Request, res: Response) =>
   res.status(200).json(new ApiResponse(200, null, "Mahsulot o'chirildi"));
 });
 
-// 5. ADD STOCK
+// 5. ADD STOCK (User ID ni jo'natamiz)
 export const addStock = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { quantity, newPrice } = req.body;
-  const result = await productService.addStock(Number(req.params.id), Number(quantity), newPrice ? Number(newPrice) : undefined);
+  const result = await productService.addStock(
+    Number(req.params.id), 
+    Number(quantity), 
+    newPrice ? Number(newPrice) : undefined,
+    req.user?.id // <-- Kim qo'shayotgani muhim
+  );
   res.status(200).json(new ApiResponse(200, result, "Mahsulot kirim qilindi"));
 });
