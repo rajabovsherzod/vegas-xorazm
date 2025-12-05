@@ -1,7 +1,7 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { Order } from "@/types/api"; // To'g'ri typeni import qilamiz
+import { Order } from "@/types/api"; 
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import {
   Receipt,
   Pencil,
   Tag,
+  TrendingDown
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -98,20 +99,24 @@ export const getColumns = ({ onView, onPrint, onEdit, onConfirm, onCancel }: Col
     accessorKey: "finalAmount",
     header: "Summa",
     cell: ({ row }) => {
-      const finalAmount = Number(row.original.finalAmount);
-      const discount = Number(row.original.discountAmount || 0);
-      const totalAmount = Number(row.original.totalAmount);
+      // 🔥 BETON MANTIQ:
+      const totalAmount = Number(row.original.totalAmount); // Asl narxlar (Chegirmasiz)
+      const finalAmount = Number(row.original.finalAmount); // To'langan (Hamma chegirmalar ayirilgan)
+      
+      // Farqi = Jami Chegirma (Aksiya + Manual + Global)
+      const totalSaved = totalAmount - finalAmount;
 
       return (
         <div className="flex flex-col items-start">
           <div className="font-bold text-[#00B8D9]">
             {formatCurrency(finalAmount, "UZS")}
           </div>
-          {/* Agar umumiy chegirma bo'lsa, tagida ko'rsatamiz */}
-          {discount > 0 && (
-            <div className="flex items-center gap-1 text-[10px] text-amber-500 font-medium">
-              <Tag className="w-3 h-3" />
-              -{formatCurrency(discount, "UZS")}
+          
+          {/* Agar farq bo'lsa, demak qanaqadir chegirma bo'lgan */}
+          {totalSaved > 0 && (
+            <div className="flex items-center gap-1 text-[10px] text-amber-500 font-bold bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-md mt-1">
+              <TrendingDown className="w-3 h-3" />
+              -{formatCurrency(totalSaved, "UZS")}
             </div>
           )}
         </div>
@@ -169,7 +174,6 @@ export const getColumns = ({ onView, onPrint, onEdit, onConfirm, onCancel }: Col
             <Eye className="w-4 h-4" />
           </Button>
 
-          {/* Chek chiqarish (Completed yoki Refunded bo'lsa ham) */}
           {(isCompleted || order.status.includes('refunded')) && (
             <Button
               variant="ghost"
@@ -182,7 +186,6 @@ export const getColumns = ({ onView, onPrint, onEdit, onConfirm, onCancel }: Col
             </Button>
           )}
 
-          {/* Faqat Draft bo'lsa Actionlar chiqadi */}
           {isDraft && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
