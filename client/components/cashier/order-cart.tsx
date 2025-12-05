@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { CartItem as CartItemComponent } from "./cart-item";
 import { OrderInfoForm } from "./order-info-form";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -16,13 +17,16 @@ import {
 import { 
   ShoppingBag, 
   Save, 
-  CreditCard
+  CreditCard,
+  Percent
 } from "lucide-react";
 
 export interface CartItem {
   product: Product;
   quantity: number;
   originalQuantity?: number; 
+  manualDiscountValue?: number;
+  manualDiscountType?: 'percent' | 'fixed';
 }
 
 interface OrderCartProps {
@@ -31,18 +35,20 @@ interface OrderCartProps {
   paymentMethod: "cash" | "card" | "transfer" | "debt";
   exchangeRate: string;
   
-  // 🔥 PROPLAR
-  totalAmount: number;         // Sotilish narxi
-  originalTotalAmount: number; // 🔥 ASL NARX (429k)
+  // Asosiy summalar
+  totalAmount: number;         // Hozirgi (Chegirmali) summa
+  originalTotalAmount: number; // Asl (Chegirmasiz) summa
   totalUSD: number;
   
   onCustomerNameChange: (val: string) => void;
   onPaymentMethodChange: (val: "cash" | "card" | "transfer" | "debt") => void;
   onExchangeRateChange: (val: string) => void;
+  
   onUpdateQuantity: (id: number, qty: number) => void;
   onRemove: (id: number) => void;
   onUpdatePrice: (id: number, price: number) => void; 
   
+  // 🔥 CHEGIRMA PROPLARI
   discountAmount: number; 
   discountValue: number;            
   discountType: 'percent' | 'fixed'; 
@@ -61,7 +67,7 @@ export function OrderCartFloating({
   exchangeRate,
   
   totalAmount, 
-  originalTotalAmount, // 🔥 TAYYOR KELADI
+  originalTotalAmount,
   totalUSD,
   
   onCustomerNameChange,
@@ -85,17 +91,28 @@ export function OrderCartFloating({
   const itemsToDisplay = cart; 
   const activeItemCount = cart.filter(i => i.quantity > 0).length;
 
-  // 1. Yakuniy to'lanadigan summa (Kassa chegirmasi ayiriladi)
-  const finalTotal = totalAmount - discountAmount;
+  // 1. YAKUNIY TO'LANADIGAN SUMMA
+  // (Sotuv narxidan - Umumiy chegirmani ayiramiz)
+  const finalTotal = Math.max(0, totalAmount - discountAmount);
 
-  // 2. Chegirma bormi?
-  // Asl summa (429k) > To'lanadigan summa (188k)
-  const hasDiscount = (originalTotalAmount - finalTotal) > 10; 
+  // 🔥 2. BETON FIX: CHIZILADIGAN NARX (STRIKE PRICE)
+  // Oldingi xato: "hasGlobalDiscount ? totalAmount : originalTotalAmount" edi.
+  // Yangi mantiq: Har doim eng katta ASL narxni ko'rsatamiz.
+  // Agar originalTotalAmount 0 bo'lib qolsa (xatolik bo'lsa), totalAmount ni olamiz.
+  const strikePrice = originalTotalAmount > 0 ? originalTotalAmount : totalAmount;
+
+  // 3. Chizilgan narxni qachon ko'rsatamiz?
+  // Agar "Chizilgan narx" > "To'lanadigan narx" dan katta bo'lsa (10 so'm farq bilan)
+  const showStrikePrice = (strikePrice - finalTotal) > 10;
+  
+  // 4. Umumiy chegirma bormi? (Badgeda ko'rsatish uchun)
+  const hasGlobalDiscount = discountAmount > 0;
 
   if (cart.length === 0) return null;
 
   return (
     <Sheet>
+      {/* FLOATING BUTTON (Pastdagi tugma) */}
       <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-8 md:bottom-8 z-50 animate-in slide-in-from-bottom-6 duration-500">
         <SheetTrigger asChild>
           <Button 
@@ -137,6 +154,7 @@ export function OrderCartFloating({
           <ScrollArea className="h-full">
             <div className="p-5 space-y-6 pb-10">
               
+              {/* MAHSULOTLAR RO'YXATI */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
                   <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Savatdagi mahsulotlar</h3>
@@ -162,6 +180,7 @@ export function OrderCartFloating({
                 </div>
               </div>
 
+              {/* MIJOZ VA TO'LOV FORM (OrderInfoForm) */}
               <div className="space-y-3">
                 <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-1">Mijoz va To'lov</h3>
                 <div className="bg-white dark:bg-[#132326] p-5 rounded-xl border border-gray-200 dark:border-white/5 shadow-sm">
@@ -193,22 +212,34 @@ export function OrderCartFloating({
           </ScrollArea>
         </div>
 
+        {/* SHEET FOOTER (YAKUNIY SUMMA) */}
         <div className="shrink-0 p-6 bg-white dark:bg-[#132326] border-t border-gray-200 dark:border-white/5 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] z-20">
           <div className="flex justify-between items-end mb-4">
              <div className="flex flex-col">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Yakuniy summa</span>
                 <div className="flex items-baseline gap-2">
+                   {/* 1. Final Narx (Eng oxirgi to'lanadigan) */}
                    <span className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
                      {formatCurrency(finalTotal, "UZS")}
                    </span>
-                   {/* 🔥 FAQAT PROP QIYMATINI CHIZIB QO'YAMIZ */}
-                   {hasDiscount && (
+                   
+                   {/* 2. Eski Narx (Eng katta asl narx) - Endi har doim to'g'ri chiqadi */}
+                   {showStrikePrice && (
                      <span className="text-sm text-muted-foreground line-through decoration-rose-500/50">
-                        {formatCurrency(originalTotalAmount, "UZS")}
+                        {formatCurrency(strikePrice, "UZS")}
                      </span>
                    )}
                 </div>
+                
+                {/* Global Chegirma Info */}
+                {hasGlobalDiscount && (
+                   <span className="text-[11px] font-bold text-[#00B8D9] mt-0.5 flex items-center gap-1">
+                      <Percent className="w-3 h-3" /> 
+                      Chegirma: -{formatCurrency(discountAmount, "UZS")}
+                   </span>
+                )}
              </div>
+             
              {totalUSD > 0 && (
                 <div className="bg-[#00B8D9]/10 px-3 py-1.5 rounded-lg text-right">
                    <span className="text-[10px] font-bold text-[#00B8D9] uppercase block">Valyutada</span>
@@ -216,6 +247,7 @@ export function OrderCartFloating({
                 </div>
              )}
           </div>
+          
           <Button 
               onClick={onSave} 
               disabled={isSaving}

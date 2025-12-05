@@ -15,10 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ProductList } from "@/components/cashier/product-list";
-// Asosiy CartItem ni import qilamiz, lekin nomini o'zgartiramiz
 import { OrderCartFloating, CartItem as BaseCartItem } from "@/components/cashier/order-cart";
 
-// 🔥 FIX: CartItem tipini shu yerda kengaytiramiz (Manual Discount uchun)
 interface CartItem extends BaseCartItem {
   manualDiscountValue?: number;
   manualDiscountType?: 'percent' | 'fixed';
@@ -30,7 +28,7 @@ export default function EditOrderPage() {
   const queryClient = useQueryClient();
   const orderId = Number(params.id);
 
-  // States (Endi yangi CartItem tipini ishlatadi)
+  // States
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "debt">("cash");
@@ -68,7 +66,7 @@ export default function EditOrderPage() {
     return [];
   }, [productsResponse]);
 
-  // 🔥 DATA SYNC & SNAPSHOT RECOVERY
+  // 🔥 1. DATA SYNC: SNAPSHOT + CATALOG RECOVERY
   useEffect(() => {
     if (!order || products.length === 0 || !order.items) return;
     if (loadedOrderId === order.id) return;
@@ -92,29 +90,46 @@ export default function EditOrderPage() {
         
         const qty = Number(item.quantity);
         
+        // 1. SOTILGAN NARX (UZS da)
         let soldPriceUZS = Number(item.price);          
-        let originalPriceUZS = Number(item.originalPrice); 
+        
+        // 2. SNAPSHOT ASL NARX (UZS da)
+        let snapshotOriginalUZS = Number(item.originalPrice); 
 
-        // Eski orderlarda 0 bo'lsa, soldPrice ni olamiz
-        if (originalPriceUZS === 0) originalPriceUZS = soldPriceUZS;
+        // 3. CATALOG NARXI (Recovery uchun) - Agar snapshot 0 bo'lsa
+        let catalogPriceUZS = Number(originalProduct.price);
+        if (originalProduct.currency === 'USD') {
+            catalogPriceUZS = catalogPriceUZS * orderRate;
+        }
 
+        // 🔥 BETON MANTIQ:
+        // Agar Snapshot 0 bo'lsa, lekin Sotilgan narx < Katalog narx bo'lsa -> Katalog narxini olamiz.
+        // Agar Snapshot bor bo'lsa -> o'shani olamiz.
+        let finalOriginalUZS = snapshotOriginalUZS > 0 
+            ? snapshotOriginalUZS 
+            : Math.max(soldPriceUZS, catalogPriceUZS);
+
+        // 4. Endi hammasini mahsulot valyutasiga qaytaramiz (CartItem ishlashi uchun)
         let displaySoldPrice = soldPriceUZS;
-        let displayOriginalPrice = originalPriceUZS;
+        let displayOriginalPrice = finalOriginalUZS;
 
         if (originalProduct.currency === 'USD') {
             displaySoldPrice = soldPriceUZS / orderRate;
-            displayOriginalPrice = originalPriceUZS / orderRate;
+            displayOriginalPrice = finalOriginalUZS / orderRate;
         }
 
-        // 🔥 BETON FIX: Original narxni majburlab yozamiz
+        // 5. Product obyektini yasaymiz
         let productForCart = { 
           ...originalProduct,
+          // Price -> Bu har doim ASL NARX bo'lishi kerak (Catalog yoki Snapshot)
           price: String(displayOriginalPrice), 
           originalPrice: String(displayOriginalPrice), 
+          
           discountPrice: null as string | null 
         };
         
-        if ((displayOriginalPrice - displaySoldPrice) > 0.1) {
+        // Agar sotilgan narx < Asl narx bo'lsa -> Chegirma bor
+        if ((displayOriginalPrice - displaySoldPrice) > 0.01) {
             productForCart.discountPrice = String(displaySoldPrice);
         }
 
@@ -122,7 +137,6 @@ export default function EditOrderPage() {
           product: productForCart, 
           quantity: qty,
           originalQuantity: qty,
-          // 🔥 Endi bu xato bermaydi, chunki tipni kengaytirdik
           manualDiscountValue: Number(item.manualDiscountValue || 0),
           manualDiscountType: item.manualDiscountType || 'fixed'
         };
@@ -163,7 +177,6 @@ export default function EditOrderPage() {
             productId: item.product.id,
             quantity: String(item.quantity),
             price: sellingPrice,
-            // 🔥 XATO KETDI: endi bemalol ishlatamiz
             manualDiscountValue: item.manualDiscountValue,
             manualDiscountType: item.manualDiscountType,
           };
@@ -180,12 +193,12 @@ export default function EditOrderPage() {
       };
       return orderService.update(orderId, payload);
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       toast.success("Muvaffaqiyatli saqlandi!");
-      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+      router.push("/cashier/orders");
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.removeQueries({ queryKey: ["order", orderId] });
       setLoadedOrderId(null);
-      router.push("/cashier/orders");
     },
     onError: (error: any) => toast.error(error?.message || "Xatolik"),
   });
@@ -237,7 +250,7 @@ export default function EditOrderPage() {
      return null;
   };
 
-  // 🔥 CALCULATIONS
+  // 🔥 2. CALCULATIONS: ASL NARXLARNI TO'G'RI HISOBLASH
   const { totalAmount, totalUSD, originalTotalAmount } = useMemo(() => {
     let usd = 0; 
     let uzs = 0; 
@@ -249,6 +262,7 @@ export default function EditOrderPage() {
       const qty = item.quantity;
       const product = item.product;
 
+      // 1. SOTILISH NARXI
       const discountP = parseFloat(product.discountPrice || "0");
       const regularP = parseFloat(product.price || "0");
       const finalPrice = (discountP > 0) ? discountP : regularP;
@@ -259,6 +273,8 @@ export default function EditOrderPage() {
         uzs += finalPrice * qty;
       }
 
+      // 2. ASL NARX (Original Price)
+      // useEffect da biz "originalPrice" ni to'g'irlab qo'yganmiz (Catalog yoki Snapshotdan)
       let itemOriginal = parseFloat(product.originalPrice as string || "0");
       let itemBase = parseFloat(product.price as string || "0");
 
@@ -267,6 +283,8 @@ export default function EditOrderPage() {
         itemBase = itemBase * rate;
       }
 
+      // useEffect dagi logika bo'yicha itemBase yoki itemOriginal allaqachon to'g'ri bo'ladi.
+      // Lekin baribir tekshiramiz:
       const effectiveOriginal = itemOriginal > 0 ? itemOriginal : itemBase;
       originalUzs += (effectiveOriginal * qty);
     });
@@ -274,7 +292,7 @@ export default function EditOrderPage() {
     return { 
         totalAmount: uzs + (usd * rate), 
         totalUSD: usd,
-        originalTotalAmount: originalUzs 
+        originalTotalAmount: originalUzs // Endi bu yerda 539k chiqishi shart
     };
   }, [cart, exchangeRate]);
 
