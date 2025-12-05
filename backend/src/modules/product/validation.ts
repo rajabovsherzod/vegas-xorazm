@@ -37,6 +37,16 @@ export const updateProductSchema = z.object({
   }),
 });
 
+export const addStockSchema = z.object({
+  body: z.object({
+    quantity: z.number().min(0.01, { message: "Miqdor 0 dan katta bo'lishi kerak" }),
+    newPrice: z.number().optional()
+  })
+});
+
+
+
 // Tiplarni export qilamiz
 export type CreateProductInput = z.infer<typeof createProductSchema>["body"];
 export type UpdateProductInput = z.infer<typeof updateProductSchema>["body"];
+export type AddStockInput = z.infer<typeof addStockSchema>["body"];

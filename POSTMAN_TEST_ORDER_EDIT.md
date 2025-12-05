@@ -1461,3 +1461,4 @@ Agar barcha testlar muvaffaqiyatli bo'lsa:
 **Postman da test qiling va natijalarni yuboring!** 🚀
 
 
+
