@@ -4,7 +4,7 @@
  * Custom error logging to GlitchTip (without Sentry SDK)
  */
 
-import logger from "@/utils/logger";
+import logger from "../utils/logger";
 
 interface GlitchTipConfig {
   dsn: string | undefined;

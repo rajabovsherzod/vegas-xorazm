@@ -37,6 +37,7 @@ declare module 'qz-tray' {
   }
 
   interface QZ {
+    printers: any;
     websocket: QZWebSocket;
     configs: QZConfigs;
     print(config: QZConfig, data: QZPrintData[]): Promise<void>;

@@ -1,8 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { ENV } from "@/lib/config/env";
 
-// Token uchun zarur bo'lgan custom tiplar (Biz uni next-auth.d.ts da yaratgandik)
+// Token uchun zarur bo'lgan custom tiplar
 interface CustomAuthUser {
   id: string;
   name: string;
@@ -10,7 +9,6 @@ interface CustomAuthUser {
   role: string;
   accessToken: string;
 }
-
 
 export const authOptions: NextAuthOptions = {
   // 1. PROVIDERS (Backendga so'rov yuborish)
@@ -24,17 +22,21 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) return null;
 
-        try {
-          console.log("NextAuth Login Attempt:", credentials);
+        // 🔥 MUHIM FIX: Server-side (Docker ichida) bo'lsak, ichki tarmoqdan foydalanamiz
+        // Aks holda (masalan local dev da) public URL dan foydalanamiz.
+        const baseUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
 
-          const res = await fetch(`${ENV.API_URL}/auth/login`, {
+        try {
+          console.log(`NextAuth Login Attempt to: ${baseUrl}/auth/login`);
+
+          const res = await fetch(`${baseUrl}/auth/login`, {
             method: "POST",
             body: JSON.stringify({
               username: credentials.username,
               password: credentials.password,
             }),
             headers: { "Content-Type": "application/json" },
-            cache: "no-store", // Keshlashni o'chirish
+            cache: "no-store",
           });
 
           const response = await res.json();
@@ -44,18 +46,22 @@ export const authOptions: NextAuthOptions = {
           if (res.ok && response.success) {
             const { user, accessToken } = response.data;
 
-            // 🚨 MUHIM: Bu yerda NextAuthga bizning custom maydonlarimiz borligini bildiramiz
+            // User obyektini NextAuth tushunadigan formatga o'tkazamiz
             return {
               id: user.id.toString(),
-              name: user.fullName, // NextAuth nomi
+              name: user.fullName || user.username,
               username: user.username,
-              role: user.role, // Custom data
-              accessToken: accessToken, // Custom data
-            } as CustomAuthUser; // Katta ehtimol bilan xato shu yerda yashiringan
+              role: user.role,
+              accessToken: accessToken,
+            } as CustomAuthUser;
           }
+          
+          // Agar backend xato qaytarsa
+          console.error("Login failed:", response.message);
           return null;
+
         } catch (error) {
-          console.error("Login error:", error);
+          console.error("Login fetch error:", error);
           return null;
         }
       },
@@ -64,17 +70,14 @@ export const authOptions: NextAuthOptions = {
 
   // 2. CALLBACKS (Ma'lumotlarni saqlash va uzatish)
   callbacks: {
-    // 🔥 ZIRHLI FIX: Bu yerda custom ma'lumotlarni token ichiga to'g'ri yozamiz
+    // JWT: User login qilganda ma'lumotlarni tokenga yozamiz
     async jwt({ token, user }) {
       if (user) {
-        // 'user' bu yerda authorize() dan kelgan CustomAuthUser tipi bo'lishi kerak
         const customUser = user as CustomAuthUser;
-
         return {
           ...token,
           id: customUser.id,
           username: customUser.username,
-          // ✅ XAVFSIZLIK: ROL VA TOKENNI TO'G'RI O'TKAZISH
           role: customUser.role,
           accessToken: customUser.accessToken,
         };
@@ -82,16 +85,17 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
-    // SESSION CALLBACK: Token ichidagi ma'lumotni client sessionga o'tkazamiz
+    // SESSION: Token ichidagi ma'lumotlarni client sessionga o'tkazamiz
     async session({ session, token }) {
-      // Token ichidagi ma'lumotlarni sessionga o'tkazamiz
-      session.user = {
-        ...session.user,
-        id: token.id,
-        username: token.username,
-        role: token.role, // Middleware shu maydonni ko'rishi SHART!
-        accessToken: token.accessToken,
-      };
+      if (token) {
+        session.user = {
+          ...session.user,
+          id: token.id as string,
+          username: token.username as string,
+          role: token.role as string,
+          accessToken: token.accessToken as string,
+        };
+      }
       return session;
     },
   },
@@ -99,11 +103,14 @@ export const authOptions: NextAuthOptions = {
   // 3. PAGES
   pages: {
     signIn: "/auth/login",
+    error: "/auth/login", // Xatolik bo'lsa ham loginga qaytsin
   },
 
   session: {
     strategy: "jwt",
+    maxAge: 7 * 24 * 60 * 60, // 7 kun
   },
-  // NEXTAUTH_SECRET albatta .env da bo'lishi kerak
+  
   secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === "development", // Dev rejimda to'liq loglarni ko'rsatish
 };
