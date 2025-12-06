@@ -550,3 +550,6 @@ export function QrScanner({ onScan }: QrScannerProps) {
 
 
 
+
+
+

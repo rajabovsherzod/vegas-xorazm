@@ -21,7 +21,9 @@ import {
   Monitor,
   Server,
   QrCode,
-  ScanLine
+  ScanLine,
+  RotateCcw,
+  ShieldAlert,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -45,6 +47,8 @@ const iconMap = {
   Server: Server,
   QrCode: QrCode,
   ScanLine: ScanLine,
+  RotateCcw: RotateCcw,
+  ShieldAlert: ShieldAlert,
 };
 
 // Navigatsiya elementi tipi

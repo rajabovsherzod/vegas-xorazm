@@ -12,7 +12,7 @@ import { useCreateUser } from "@/hooks/mutations/use-user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
@@ -43,7 +43,7 @@ export function AddUserDialog() {
       fullName: "",
       username: "",
       password: "",
-      role: "seller",
+      role: "seller", // Default
       fixSalary: 0,
       bonusPercent: 0,
       finePerHour: 0,
@@ -171,7 +171,7 @@ export function AddUserDialog() {
                       name="role"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-200">Rol</FormLabel>
+                          <FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-200">Lavozim</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger className="h-11 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-[#00B8D9]/20 focus:border-[#00B8D9] rounded-xl font-medium">
@@ -182,8 +182,16 @@ export function AddUserDialog() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent className="rounded-xl bg-white dark:bg-[#1C2C30] border-gray-100 dark:border-white/10 shadow-lg z-[9999]">
-                              <SelectItem value="seller" className="cursor-pointer focus:bg-[#00B8D9]/10 focus:text-[#00B8D9]">Seller (Sotuvchi)</SelectItem>
-                              <SelectItem value="admin" className="cursor-pointer focus:bg-[#00B8D9]/10 focus:text-[#00B8D9]">Admin (Kassa)</SelectItem>
+                              {/* 🔥 ROLLAR O'ZGARTIRILDI */}
+                              <SelectItem value="admin" className="cursor-pointer focus:bg-[#00B8D9]/10 focus:text-[#00B8D9] font-medium py-2.5">
+                                Administrator
+                              </SelectItem>
+                              <SelectItem value="cashier" className="cursor-pointer focus:bg-[#00B8D9]/10 focus:text-[#00B8D9] font-medium py-2.5">
+                                Kassir
+                              </SelectItem>
+                              <SelectItem value="seller" className="cursor-pointer focus:bg-[#00B8D9]/10 focus:text-[#00B8D9] font-medium py-2.5">
+                                Sotuvchi (Seller)
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />

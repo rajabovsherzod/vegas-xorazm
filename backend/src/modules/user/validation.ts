@@ -1,7 +1,9 @@
 import { z } from "zod";
 
-// Enum qiymatlarini qo'lda yozgan ma'qul (Circular Dependency xavfini yo'qotish uchun)
-const roles = ["owner", "admin", "seller"] as const;
+// Tizimdagi mavjud rollar
+const roles = ["admin", "cashier", "seller"] as const; 
+// Izoh: 'owner' bu ro'yxatda yo'q, chunki hech kim yangi 'owner' yarata olmasligi kerak. 
+// Owner faqat Admin, Cashier va Sellerni yaratadi.
 
 const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/;
 
@@ -11,12 +13,11 @@ export const createUserSchema = z.object({
     username: z.string().min(3, "Login kamida 3 harf bo'lishi kerak").max(50),
     password: z.string().min(5, "Parol kamida 5 ta belgidan iborat bo'lishi kerak"),
     
+    // Faqat shu 3 ta rolni tanlash mumkin
     role: z.enum(roles, {
-      errorMap: () => ({ message: "Rol noto'g'ri tanlandi" })
+      errorMap: () => ({ message: "Rol noto'g'ri tanlandi. (admin, cashier yoki seller bo'lishi kerak)" })
     }),
 
-    // 🔥 MUHIM O'ZGARISH: z.coerce.string()
-    // Bu frontenddan number kelsa ham stringga aylantirib oladi.
     fixSalary: z.coerce.string().regex(/^\d+(\.\d{1,2})?$/, "Oylik noto'g'ri").default("0"),
     bonusPercent: z.coerce.string().regex(/^\d+(\.\d{1,2})?$/, "Bonus noto'g'ri").default("0"),
     finePerHour: z.coerce.string().regex(/^\d+(\.\d{1,2})?$/, "Jarima noto'g'ri").default("0"),
@@ -46,4 +47,3 @@ export const updateUserSchema = z.object({
 
 export type CreateUserInput = z.infer<typeof createUserSchema>["body"];
 export type UpdateUserInput = z.infer<typeof updateUserSchema>["body"];
-

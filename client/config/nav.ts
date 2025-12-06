@@ -13,7 +13,9 @@ import {
   Monitor,
   Server,
   QrCode,
-  ScanLine
+  ScanLine,
+  RotateCcw, // Qaytarishlar tarixi uchun
+  ShieldAlert // Bekor qilish/Nazorat uchun
 } from "lucide-react";
 
 import { NavItem } from "@/components/layout/app-sidebar";
@@ -41,4 +43,23 @@ export const superAdminNav: NavItem[] = [
 export const sellerNav: NavItem[] = [
   { text: "Kassa", url: "/seller/pos", icon: "Store" },
   { text: "Yakunlanganlar", url: "/seller/orders", icon: "CheckCircle" },
+];
+
+export const adminNav: NavItem[] = [
+  { 
+    text: "Dashboard", 
+    url: "/admin/dashboard", 
+    icon: "LayoutDashboard" 
+  },
+  { 
+    text: "Buyurtmalar", 
+    url: "/admin/orders", 
+    icon: "ShoppingCart",
+    // Bu yerda admin hamma orderlarni ko'radi va "Qaytarish" tugmasini bosadi
+  },
+  { 
+    text: "Qaytarishlar Tarixi", 
+    url: "/admin/refunds", 
+    icon: "RotateCcw" 
+  },
 ];

@@ -430,3 +430,6 @@ Har bir kompyuterda (chek chiqaradigan joyda) QZ Tray o'rnatilishi kerak:
 
 
 
+
+
+

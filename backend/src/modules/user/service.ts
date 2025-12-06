@@ -4,36 +4,43 @@ import { eq, desc } from "drizzle-orm";
 import ApiError from "@/utils/ApiError";
 import logger from "@/utils/logger";
 import bcrypt from "bcrypt";
-import { getIO } from "@/socket"; // 🔌 SOCKET IMPORT
+import { getIO } from "@/socket"; 
 import { CreateUserInput, UpdateUserInput } from "./validation";
 
 export const userService = {
-  // 1. GET ALL
+  // 1. GET ALL (O'chirilmaganlarni olish)
   getAll: async () => {
     const data = await db.query.users.findMany({
       where: eq(users.isDeleted, false),
       orderBy: desc(users.createdAt),
       columns: {
-        password: false,
+        password: false, // Parolni qaytarmaymiz
       }
     });
     return data;
   },
 
-  // 2. CREATE
+  // 2. CREATE (Yangi xodim yaratish)
   create: async (payload: CreateUserInput) => {
+    // 1. Login band emasmi?
     const existingUser = await db.query.users.findFirst({
       where: eq(users.username, payload.username),
     });
-    if (existingUser) throw new ApiError(409, "Bu xodim tizimda allaqachon mavjud!");
+    
+    if (existingUser) {
+      throw new ApiError(409, "Bu login allaqachon band!");
+    }
 
+    // 2. Parolni shifrlash
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(payload.password, saltRounds);
 
+    // 3. Bazaga yozish
     const [newUser] = await db.insert(users).values({
       ...payload,
       password: hashedPassword,
-      role: payload.role as "owner" | "admin" | "seller", 
+      // TypeScript uchun rolni aniqlashtiramiz (schema dagi enumga moslab)
+      role: payload.role as "admin" | "cashier" | "seller", 
     }).returning({
       id: users.id,
       username: users.username,
@@ -41,26 +48,21 @@ export const userService = {
       role: users.role,
       isActive: users.isActive,
       createdAt: users.createdAt,
-      updatedAt: users.updatedAt
     });
 
-    logger.info(`Yangi foydalanuvchi yaratildi. ID: ${newUser.id}, Role: ${newUser.role}`);
+    logger.info(`Yangi xodim yaratildi: ${newUser.username} (${newUser.role})`);
     
-    // User yaratilganda socket shart emas (Admin o'zi ko'rib turibdi), lekin xohlasangiz qo'shish mumkin.
     return newUser;
   },
 
-  // 3. UPDATE (Bloklash mantig'i bilan)
+  // 3. UPDATE
   update: async (id: number, payload: UpdateUserInput) => {
     let updateData: any = { ...payload };
     
+    // Agar parol o'zgarsa, qayta shifrlaymiz
     if (payload.password) {
       const saltRounds = 10;
       updateData.password = await bcrypt.hash(payload.password, saltRounds);
-    }
-
-    if (payload.role) {
-        updateData.role = payload.role as "owner" | "admin" | "seller";
     }
 
     const [updatedUser] = await db
@@ -76,30 +78,25 @@ export const userService = {
         fullName: users.fullName,
         role: users.role,
         isActive: users.isActive,
-        updatedAt: users.updatedAt
       });
 
-    if (!updatedUser) throw new ApiError(404, "Foydalanuvchi topilmadi");
+    if (!updatedUser) throw new ApiError(404, "Xodim topilmadi");
 
-    logger.info(`Foydalanuvchi yangilandi. ID: ${id}`);
-
-    // 🔥 SOCKET: Agar user bloklangan bo'lsa (isActive = false)
+    // 🔥 SOCKET: Agar bloklansa (isActive=false), tizimdan chiqarib yuboramiz
     if (payload.isActive === false) {
         try {
-            // Userni majburan tizimdan chiqarib yuboramiz
             getIO().emit("user_status_change", {
                 userId: id,
                 status: "blocked",
-                message: "Sizning akkauntingiz ma'muriyat tomonidan bloklandi."
+                message: "Sizning akkauntingiz bloklandi."
             });
-            logger.warn(`User ${id} bloklandi va socket signali yuborildi.`);
-        } catch (e) { console.error("Socket error:", e); }
+        } catch (e) { logger.error(e); }
     }
 
     return updatedUser;
   },
 
-  // 4. DELETE (Majburiy Logout)
+  // 4. DELETE (Soft Delete)
   delete: async (id: number) => {
     const [deleted] = await db
       .update(users)
@@ -111,18 +108,16 @@ export const userService = {
       .where(eq(users.id, id))
       .returning({ id: users.id, username: users.username });
 
-    if (!deleted) throw new ApiError(404, "Foydalanuvchi topilmadi");
+    if (!deleted) throw new ApiError(404, "Xodim topilmadi");
 
-    logger.warn(`Xodim ishdan bo'shatildi. ID: ${id}`);
-
-    // 🔥 SOCKET: User o'chirilganda ham chiqarib yuboramiz
+    // 🔥 SOCKET: O'chirilganda ham chiqarib yuboramiz
     try {
         getIO().emit("user_status_change", {
             userId: id,
             status: "deleted",
             message: "Akkaunt o'chirildi."
         });
-    } catch (e) { console.error("Socket error:", e); }
+    } catch (e) { logger.error(e); }
 
     return deleted;
   },
@@ -133,7 +128,7 @@ export const userService = {
           where: eq(users.id, id),
           columns: { password: false }
       });
-      if (!user) throw new ApiError(404, "Foydalanuvchi topilmadi");
+      if (!user) throw new ApiError(404, "Xodim topilmadi");
       return user;
   }
 };

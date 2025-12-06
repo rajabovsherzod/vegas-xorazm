@@ -5,6 +5,14 @@ import type { Order, CreateOrderPayload, UpdateOrderStatusPayload, OrderStatus }
 export type { Order, CreateOrderPayload, OrderStatus };
 export type { OrderItem } from "@/types/api";
 
+
+export interface RefundPayload {
+  items: { 
+    productId: number; 
+    quantity: number 
+  }[];
+  reason?: string;
+}
 /**
  * Order Service
  * 
@@ -53,5 +61,10 @@ export const orderService = {
    */
   markAsPrinted: async (orderId: number): Promise<Order> => {
     return await api.patch<Order>(`/orders/${orderId}/printed`, {});
+  },
+
+  refund: async (orderId: number, payload: RefundPayload): Promise<any> => {
+    const data = await api.post<any>(`/orders/${orderId}/refund`, payload);
+    return data;
   },
 };

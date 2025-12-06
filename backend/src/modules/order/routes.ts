@@ -31,10 +31,10 @@ router.route("/")
 // 3. ID bo'yicha marshrutlar (MUHIM: Bu eng oxirida bo'lishi kerak emas, lekin statik yo'llardan keyin bo'lishi kerak)
 router.route("/:id")
   // GET: Bitta orderni olish
-  .get(authorize('owner', 'cashier', 'seller'), getOrderById)
+  .get(authorize('owner', 'admin', 'cashier', 'seller'), getOrderById)
   // PATCH: Tahrirlash (PUT shart emas, PATCH yetarli)
   .patch(
-    authorize('owner', 'cashier', 'seller'),
+    authorize('owner', 'admin', 'cashier', 'seller'),
     sanitizeInput({ skipFields: ['password'] }),
     validate(updateOrderSchema),
     updateOrder
