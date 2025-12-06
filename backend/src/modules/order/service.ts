@@ -271,7 +271,6 @@ export const orderService = {
       if (order.status !== 'draft') throw new ApiError(400, "Faqat kutilayotgan orderlar tahrirlanadi");
       if (userRole === 'seller' && order.sellerId !== userId) throw new ApiError(403, "Ruxsat yo'q");
 
-      const stockChanges: { id: number; quantity: number; action: 'add' | 'subtract' }[] = [];
       const oldItemsMap = new Map(order.items.map(item => [item.productId, Number(item.quantity)]));
       const newItemsMap = new Map(payload.items.map(item => [item.productId, Number(item.quantity)]));
 
@@ -283,22 +282,20 @@ export const orderService = {
         const newQty = newItemsMap.get(productId) || 0;
         const diff = newQty - oldQty;
 
-        if (diff === 0) continue; // O'zgarish yo'q
+        if (diff === 0) continue; 
 
-        if (diff > 0) { // Mahsulot soni oshdi (ombordan yechish kerak)
+        if (diff > 0) { 
           await tx.execute(sql`UPDATE products SET stock = stock - ${diff} WHERE id = ${productId}`);
-          stockChanges.push({ id: productId, quantity: diff, action: 'subtract' });
-        } else { // Mahsulot soni kamaydi (omborga qaytarish kerak)
+        } else { 
           const returnQty = Math.abs(diff);
           await tx.execute(sql`UPDATE products SET stock = stock + ${returnQty} WHERE id = ${productId}`);
-          stockChanges.push({ id: productId, quantity: returnQty, action: 'add' });
         }
       }
 
       // Eski itemsni o'chirish
       await tx.delete(orderItems).where(eq(orderItems.orderId, orderId));
 
-      // 3. YANGI ITEMLARNI QO'SHISH (Create dagi mantiq bilan bir xil)
+      // 3. YANGI ITEMLARNI QO'SHISH
       const newItems = payload.items;
       const newProductIds = newItems.map(item => item.productId);
       const dbProducts = await tx.query.products.findMany({ where: inArray(products.id, newProductIds) });
@@ -312,12 +309,7 @@ export const orderService = {
         const product = dbProducts.find(p => p.id === newItem.productId);
         if (!product || !product.isActive) throw new ApiError(400, "Xato mahsulot");
 
-        // Yangi stock tekshiruvi
-        const currentStock = Number(product.stock); 
-        const requestQty = Number(newItem.quantity);
-
-        // Stock tekshiruvi yuqorida, diff orqali qilingan.
-        // Bu yerda qayta tekshirish va o'zgartirish shart emas.
+        // Stock yetarliligini tekshirish (faqat manfiy bo'lib ketmasligi uchun)
         const productStock = (await tx.query.products.findFirst({ where: eq(products.id, product.id) }))?.stock || '0';
         if (Number(productStock) < 0) {
             throw new ApiError(409, `Omborda yetarli emas: ${product.name}`);
@@ -336,8 +328,8 @@ export const orderService = {
         }
         const originalPriceInUzs = product.currency === 'USD' ? originalPrice * currentRate : originalPrice;
 
-        const lineTotalOriginal = originalPriceInUzs * requestQty;
-        const lineTotalSold = soldPrice * requestQty;
+        const lineTotalOriginal = originalPriceInUzs * Number(newItem.quantity);
+        const lineTotalSold = soldPrice * Number(newItem.quantity);
 
         totalAmount += lineTotalOriginal;
         itemsTotal += lineTotalSold;
@@ -345,12 +337,10 @@ export const orderService = {
         itemsToInsert.push({
           orderId: orderId,
           productId: product.id,
-          quantity: String(requestQty),
+          quantity: String(newItem.quantity),
           price: String(soldPrice),
           originalPrice: String(originalPriceInUzs),
           totalPrice: String(lineTotalSold),
-          
-          // 🔥 YANGI: Update paytida ham tarix saqlanadi
           manualDiscountValue: String(newItem.manualDiscountValue || 0),
           manualDiscountType: newItem.manualDiscountType || 'fixed',
         });
@@ -360,7 +350,7 @@ export const orderService = {
         await tx.insert(orderItems).values(itemsToInsert);
       }
 
-      // UMUMIY CHEGIRMA (Recalculate)
+      // UMUMIY CHEGIRMA
       const discountValue = Number(payload.discountValue || 0);
       const discountType = payload.discountType || 'fixed';
       
@@ -373,9 +363,6 @@ export const orderService = {
         }
       }
       
-      // Frontenddan discountAmount kelsa ham, biz backend hisobiga ustunlik beramiz yoki solishtiramiz.
-      // Beton tizimda backend hisoblagani ma'qul.
-      
       const finalAmount = itemsTotal - globalDiscountAmount;
       if (finalAmount < 0) throw new ApiError(400, "Chegirma xato");
 
@@ -385,28 +372,30 @@ export const orderService = {
           paymentMethod: (payload.paymentMethod ?? order.paymentMethod) as any,
           type: (payload.type ?? order.type) as any,
           exchangeRate: String(currentRate),
-          
           totalAmount: String(totalAmount),
           discountAmount: String(globalDiscountAmount),
           finalAmount: String(finalAmount),
-          
-          // 🔥 Chegirma "Retsepti"ni yangilash
           discountValue: String(discountValue),
           discountType: discountType,
-          
           updatedAt: new Date(),
         })
         .where(eq(orders.id, orderId))
         .returning();
 
+      // 🔥 SOCKET REAL-TIME FIX 🔥
       try {
         const io = getIO();
-        io.to("admin_room").emit("order_updated", { id: orderId, updatedBy: userId, totalAmount: updatedOrder.totalAmount });
         
-        // TODO: Bu xabar keraksiz toastlarga sabab bo'lmoqda. Vaqtincha o'chirildi.
-        // if (stockChanges.length > 0) {
-        //   io.to("admin_room").emit("stock_update", { action: "refresh", items: stockChanges });
-        // }
+        // OLDIN: io.to("admin_room").emit(...) edi (faqat adminlar ko'rardi)
+        // HOZIR: io.emit(...) (Hamma ko'radi, Seller ham)
+        
+        io.emit("order_updated", { 
+          id: orderId, 
+          sellerId: order.sellerId, // Kimniki ekanini bildirish uchun
+          updatedBy: userId,        // Kim o'zgartirganini bildirish uchun
+          totalAmount: updatedOrder.finalAmount 
+        });
+
       } catch (e) { logger.error(e); }
 
       return updatedOrder;

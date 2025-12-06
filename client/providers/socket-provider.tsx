@@ -34,7 +34,6 @@ export function SocketProvider({ children }: SocketProviderProps) {
   useEffect(() => {
     if (!session?.user) return;
 
-    // Socket ulanishini yaratish
     const socket = io(ENV.WS_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
@@ -48,10 +47,13 @@ export function SocketProvider({ children }: SocketProviderProps) {
       console.log("🔌 Socket ulandi:", socket.id);
       isConnectedRef.current = true;
 
-      // Admin bo'lsa admin xonasiga qo'shilish
-      if (session.user.role === "admin" || session.user.role === "owner") {
+      // Adminlar xonasiga qo'shilish
+      if (["admin", "owner", "cashier"].includes(session.user.role)) {
         socket.emit("join_admin");
-        console.log("👑 Admin xonasiga qo'shildi");
+      }
+      // 🔥 YANGI: Sellerlar ham o'z xonasiga kirsin (kelajak uchun kerak bo'ladi)
+      if (session.user.role === "seller") {
+        socket.emit("join_seller"); 
       }
     });
 
@@ -60,43 +62,51 @@ export function SocketProvider({ children }: SocketProviderProps) {
       isConnectedRef.current = false;
     });
 
-    // 🔥 YANGI ORDER (Admin uchun)
+    // ---------------- EVENTLAR ----------------
+
+    // 1. YANGI ORDER (Faqat Admin/Cashier uchun muhim, lekin Seller ham ko'rsa zarar qilmaydi)
     socket.on("new_order", (data: any) => {
-      console.log("📦 Yangi order keldi:", data);
-
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
 
-      // Muvaffaqiyatli yangi order haqida aniq xabar
-      toast.success(`Yangi buyurtma #${data.id} qabul qilindi`, {
-        description: `${data.customerName || "Mijoz"} - ${new Intl.NumberFormat("uz-UZ").format(Number(data.totalAmount))} UZS`,
-      });
-    });
-
-    // 🔥 OMBOR YANGILANDI
-    socket.on("stock_update", (data: { action: "add" | "subtract"; items: { id: number; quantity: number }[] }) => {
-      // ✅ FAQQAT QUERY INVALIDATE QILINADI, ORTIQCHA TOAST YUQ
-      console.log("📊 Ombor yangilanishi signali keldi");
-      queryClient.invalidateQueries({ queryKey: ["products"] }); 
-    });
-
-    // 🔥 ORDER STATUS O'ZGARDI
-    socket.on("order_status_change", (data: { id: number; status: string }) => {
-      console.log("✅ Order status o'zgardi:", data);
-
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["seller-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-
-      // Toza status xabarlari
-      if (data.status === "completed") {
-        toast.success(`Buyurtma #${data.id} tasdiqlandi`);
-      } else if (data.status === "cancelled") {
-        toast.error(`Buyurtma #${data.id} bekor qilindi`);
+      if (session.user.role !== "seller") {
+        toast.success(`Yangi buyurtma #${data.id}`, {
+          description: `${data.customerName || "Mijoz"} - ${new Intl.NumberFormat("uz-UZ").format(Number(data.totalAmount))} UZS`,
+        });
       }
     });
 
-    // Cleanup
+    // 2. 🔥 ORDER TAHRIRLANDI (EDIT) - ENG MUHIM QISM
+    // Bu event Sellerga ham, Cashierga ham keladi
+    socket.on("order_updated", (data: { id: number }) => {
+      console.log("✏️ Order tahrirlandi:", data);
+      
+      // Hamma joyni yangilaymiz
+      queryClient.invalidateQueries({ queryKey: ["orders"] }); // Ro'yxat
+      queryClient.invalidateQueries({ queryKey: ["order", Number(data.id)] }); // Detail page (Edit page)
+      queryClient.invalidateQueries({ queryKey: ["seller-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+
+      // Faqat boshqalar o'zgartirsa Toast chiqaramiz (o'zimizga o'zimiz chiqarmaslik uchun)
+      // Lekin hozircha hammani xabardor qilamiz:
+      toast.info(`Buyurtma #${data.id} ma'lumotlari yangilandi`);
+    });
+
+    // 3. ORDER STATUS O'ZGARDI
+    socket.on("order_status_change", (data: { id: number; status: string }) => {
+      console.log("✅ Status o'zgardi:", data);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order", Number(data.id)] }); 
+      
+      if (data.status === "completed") toast.success(`Buyurtma #${data.id} tasdiqlandi`);
+      if (data.status === "cancelled") toast.error(`Buyurtma #${data.id} bekor qilindi`);
+    });
+
+    // 4. OMBOR YANGILANDI
+    socket.on("stock_update", () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] }); 
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

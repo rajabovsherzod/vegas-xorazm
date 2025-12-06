@@ -4,47 +4,49 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, AlertCircle } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 
-// Services & Types
 import { orderService } from "@/lib/services/order.service";
 import { productService } from "@/lib/services/product.service";
+import { useSocket } from "@/hooks/use-socket"; // 🔥 Real-time uchun
 import type { Product } from "@/types/api";
 
-// UI Components
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// 🔥 BU YERDA "columns" IMPORTI YO'Q, BO'LMASLIGI HAM KERAK
-import { ProductList } from "@/components/cashier/product-list";
-import { OrderCartFloating, CartItem } from "@/components/cashier/order-cart";
+import { ProductList } from "@/components/cashier/product-list"; // Seller path
+import { OrderCartFloating, CartItem as BaseCartItem } from "@/components/cashier/order-cart"; // Seller path
 
-export default function EditOrderPage() {
+interface CartItem extends BaseCartItem {
+  manualDiscountValue?: number;
+  manualDiscountType?: 'percent' | 'fixed';
+}
+
+export default function SellerEditOrderPage() {
   const router = useRouter();
   const params = useParams();
   const queryClient = useQueryClient();
+  const socket = useSocket(); // Socket ulandi
   const orderId = Number(params.id);
 
-  // --- STATES ---
+  // States
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "debt">("cash");
+  const [paymentMethod, setPaymentMethod] = useState<any>("cash");
   const [exchangeRate, setExchangeRate] = useState("12800");
   const [searchQuery, setSearchQuery] = useState("");
-  const [loadedOrderId, setLoadedOrderId] = useState<number | null>(null);
   
-  // 🔥 CHEGIRMA STATELARI
+  // Discount States
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountValue, setDiscountValue] = useState(0);
   const [discountType, setDiscountType] = useState<'percent'|'fixed'>('fixed');
 
-  // --- QUERIES ---
-  const { data: order, isLoading: orderLoading, error: orderError } = useQuery({
+  // Queries
+  const { data: order, isLoading: orderLoading } = useQuery({
     queryKey: ["order", orderId],
     queryFn: () => orderService.getById(orderId),
-    enabled: !!orderId && orderId > 0,
-    refetchOnMount: true, 
+    enabled: !!orderId,
   });
 
   const { data: productsResponse, isLoading: productsLoading } = useQuery({
@@ -64,14 +66,32 @@ export default function EditOrderPage() {
     return [];
   }, [productsResponse]);
 
-  // --- EFFECT: DATA SYNC ---
+  // 🔥 1. REAL-TIME UPDATE (Kassir o'zgartirsa, Sellerda ham o'zgaradi)
+  useEffect(() => {
+    if (!socket) return;
+
+    // Faqat shu orderga tegishli o'zgarish bo'lsa yangilaymiz
+    const handleUpdate = (data: any) => {
+      if (Number(data.id) === orderId) {
+        toast.info("Buyurtma yangilandi (Kassir tomonidan)");
+        queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      }
+    };
+
+    socket.on("order_updated", handleUpdate);
+    return () => {
+      socket.off("order_updated");
+    };
+  }, [socket, orderId, queryClient]);
+
+
+  // 🔥 2. DATA SYNC: "BETON" RESTORE LOGIC
   useEffect(() => {
     if (!order || products.length === 0 || !order.items) return;
-    if (loadedOrderId === order.id) return;
     
     if (order.status !== "draft") {
       toast.error("Faqat kutilayotgan buyurtmalarni tahrir qilish mumkin");
-      router.push("/seller/orders"); // Seller ordersga qaytaramiz
+      router.push("/seller/orders");
       return;
     }
 
@@ -79,26 +99,61 @@ export default function EditOrderPage() {
       ? (order.paymentMethod as any) 
       : "cash";
 
+    const orderRate = Number(order.exchangeRate) || 1;
+
     const loadedCart: CartItem[] = (order.items || [])
       .map((item: any) => {
         const originalProduct = products.find((p: Product) => p.id === item.productId);
         if (!originalProduct) return null;
         
         const qty = Number(item.quantity);
-        const itemPrice = Number(item.price); 
-        const catalogPrice = Number(originalProduct.price);
-
-        let productForCart = { ...originalProduct };
         
-        // Manual Discount Restore
-        if (itemPrice < catalogPrice) {
-            productForCart.discountPrice = String(itemPrice);
+        // --- NARXLARNI TIKLASH (ENG MUHIM JOYI) ---
+        
+        // 1. Bazadan UZS narxlarni olamiz
+        let dbSoldPriceUZS = Number(item.price);          
+        let dbOriginalPriceUZS = Number(item.originalPrice); 
+
+        // Agar eski ma'lumot bo'lib original 0 bo'lsa, soldPrice ni olamiz
+        if (dbOriginalPriceUZS === 0) dbOriginalPriceUZS = dbSoldPriceUZS;
+
+        // 2. Kursga bo'lish (Agar USD mahsulot bo'lsa)
+        // Seller ko'zi bilan qaraganda: $12 lik narsa $6 ga sotilgan bo'lsa,
+        // bizga UZS emas, aynan $6 kerak.
+        let displaySoldPrice = dbSoldPriceUZS;
+        let displayOriginalPrice = dbOriginalPriceUZS;
+
+        if (originalProduct.currency === 'USD') {
+            displaySoldPrice = dbSoldPriceUZS / orderRate;
+            displayOriginalPrice = dbOriginalPriceUZS / orderRate;
+        }
+
+        // 3. Product obyektini "Orderdagi Narx" bilan yasaymiz
+        // Katalogdagi narxni (originalProduct.price) butunlay ignor qilamiz.
+        let productForCart = { 
+          ...originalProduct,
+          
+          // Asl narx (Katalogdagi emas, Orderdagi tarixiy narx)
+          price: String(displayOriginalPrice), 
+          originalPrice: String(displayOriginalPrice), 
+          
+          // Chegirma narxi (boshida null)
+          discountPrice: null as string | null 
+        };
+        
+        // 4. Agar sotilgan narx (displaySoldPrice) asl narxdan arzon bo'lsa,
+        // demak bu itemda chegirma bo'lgan. O'shani yoqamiz.
+        // (Masalan: $6 < $12)
+        if ((displayOriginalPrice - displaySoldPrice) > 0.01) {
+            productForCart.discountPrice = String(displaySoldPrice);
         }
 
         return { 
           product: productForCart, 
           quantity: qty,
-          originalQuantity: qty 
+          originalQuantity: qty,
+          manualDiscountValue: Number(item.manualDiscountValue || 0),
+          manualDiscountType: item.manualDiscountType || 'fixed'
         };
       })
       .filter((item: CartItem | null): item is CartItem => item !== null) as CartItem[];
@@ -108,15 +163,14 @@ export default function EditOrderPage() {
     setPaymentMethod(method);
     setExchangeRate(String(order.exchangeRate || "12800"));
     
-    // 🔥 CHEGIRMA RESTORE
+    // Global Chegirmalarni tiklash
     setDiscountAmount(Number(order.discountAmount || 0));
     setDiscountValue(Number(order.discountValue || 0));
     setDiscountType((order.discountType as any) || 'fixed');
     
-    setLoadedOrderId(order.id);
-  }, [order, products, router, loadedOrderId]);
+  }, [order, products, router]); // Dependencydan loadedOrderId olib tashlandi (har safar order yangilanganda qayta chizilsin)
 
-  // --- HANDLERS ---
+  // Handlers
   const handleDiscountApply = (amount: number, value: number, type: 'percent' | 'fixed') => {
     setDiscountAmount(amount);
     setDiscountValue(value);
@@ -130,44 +184,44 @@ export default function EditOrderPage() {
   
       const payload = {
         items: validItems.map((item) => {
-          const sellingPrice = Number(item.product.discountPrice) > 0 
-                ? Number(item.product.discountPrice) 
-                : undefined;
+          // 🔥 SAVATDAGI NARXNI SERVERGA MAJBURLAB YUBORISH
+          const discountP = Number(item.product.discountPrice);
+          const baseP = Number(item.product.price);
+          
+          // Agar discountPrice bo'lsa (masalan $6), o'shani olamiz. Bo'lmasa $12.
+          const actualPrice = discountP > 0 ? discountP : baseP;
+          
           return {
             productId: item.product.id,
             quantity: String(item.quantity),
-            price: sellingPrice
+            price: actualPrice, // Aniq narx ketadi
+            manualDiscountValue: item.manualDiscountValue,
+            manualDiscountType: item.manualDiscountType,
           };
         }),
         customerName: customerName || undefined,
         paymentMethod: paymentMethod,
         exchangeRate: exchangeRate,
-        
-        discountAmount: discountAmount,
-        discountValue: discountValue,
-        discountType: discountType,
-        
+        discountAmount,
+        discountValue,
+        discountType,
         type: order?.type || "retail",
       };
       return orderService.update(orderId, payload);
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       toast.success("Muvaffaqiyatli saqlandi!");
-      await queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.removeQueries({ queryKey: ["order", orderId] });
-      setLoadedOrderId(null);
-      router.push("/seller/orders"); // Seller ordersga qaytish
+      router.push("/seller/orders");
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
     onError: (error: any) => toast.error(error?.message || "Xatolik"),
   });
 
-  // ... Cart Handlers (Add, Decrease, Remove, Update) ...
+  // Cart Handlers (Standard)
   const addToCart = (product: Product) => {
     setCart(prev => {
       const exists = prev.find(i => i.product.id === product.id);
-      if(exists) {
-        return prev.map(i => i.product.id === product.id ? {...i, quantity: i.quantity + 1} : i);
-      }
+      if(exists) return prev.map(i => i.product.id === product.id ? {...i, quantity: i.quantity + 1} : i);
       return [...prev, { product, quantity: 1 }];
     });
   };
@@ -197,27 +251,57 @@ export default function EditOrderPage() {
         return item;
     }));
   };
-  const getStockError = (item: CartItem): string | null => {
+  const getStockError = (item: BaseCartItem): string | null => {
      const limit = Number(item.product.stock) + (item.originalQuantity || 0);
      if(item.quantity > limit) return `Omborda faqat ${limit} ta bor`;
      return null;
   };
 
-  // Calculations
-  const { totalAmount, totalUSD } = useMemo(() => {
-    let usd = 0, uzs = 0;
-    cart.forEach((item) => {
-      const discountP = parseFloat(item.product.discountPrice || "0");
-      const regularP = parseFloat(item.product.price || "0");
-      const finalPrice = (discountP > 0) ? discountP : regularP;
-      const qty = item.quantity;
-      if (item.product.currency === "USD") usd += finalPrice * qty;
-      else uzs += finalPrice * qty;
-    });
+  // 🔥 3. CALCULATIONS (To'g'ri hisoblash)
+  const { totalAmount, totalUSD, originalTotalAmount } = useMemo(() => {
+    let usd = 0; 
+    let uzs = 0; 
+    let originalUzs = 0; 
+
     const rate = parseFloat(exchangeRate) || 1;
-    return { totalAmount: uzs + usd * rate, totalUSD: usd };
+
+    cart.forEach((item) => {
+      const qty = item.quantity;
+      const product = item.product;
+
+      // SOTILISH NARXI (Bu biz tiklagan $6 yoki 5000 so'm)
+      const discountP = parseFloat(product.discountPrice || "0");
+      const regularP = parseFloat(product.price || "0");
+      const finalPrice = (discountP > 0) ? discountP : regularP;
+
+      if (product.currency === "USD") {
+        usd += finalPrice * qty;
+      } else {
+        uzs += finalPrice * qty;
+      }
+
+      // ASL NARX (Bu biz tiklagan $12 yoki 10000 so'm)
+      let itemOriginal = parseFloat(product.originalPrice as string || "0");
+      
+      // Valyutani konvertatsiya qilish
+      if (product.currency === 'USD') {
+        itemOriginal = itemOriginal * rate;
+      }
+
+      // Agar original 0 bo'lsa (xatolik bo'lsa), final price ni olamiz
+      const effectiveOriginal = itemOriginal > 0 ? itemOriginal : (finalPrice * (product.currency==='USD'?rate:1));
+      
+      originalUzs += (effectiveOriginal * qty);
+    });
+
+    return { 
+        totalAmount: uzs + (usd * rate), 
+        totalUSD: usd,
+        originalTotalAmount: originalUzs 
+    };
   }, [cart, exchangeRate]);
 
+  // Filtering
   const filteredProducts = useMemo(() => {
     if (!searchQuery) return products;
     const q = searchQuery.toLowerCase();
@@ -229,18 +313,6 @@ export default function EditOrderPage() {
   }, [products, searchQuery]);
 
   if (orderLoading || productsLoading) return <div className="p-6"><Skeleton className="h-[600px] w-full" /></div>;
-  
-  if (orderError || !order) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <AlertCircle className="w-16 h-16 text-rose-500" />
-        <h2 className="text-2xl font-bold">Buyurtma topilmadi</h2>
-        <Button onClick={() => router.push("/seller/orders")}>
-          <ArrowLeft className="w-4 h-4 mr-2" /> Orqaga
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <div className="h-[calc(100vh-80px)] flex flex-col gap-2 pb-24"> 
@@ -270,7 +342,9 @@ export default function EditOrderPage() {
         customerName={customerName}
         paymentMethod={paymentMethod}
         exchangeRate={exchangeRate}
-        totalAmount={totalAmount}
+        
+        totalAmount={totalAmount}            
+        originalTotalAmount={originalTotalAmount}
         totalUSD={totalUSD}
         
         onCustomerNameChange={setCustomerName}
@@ -279,22 +353,14 @@ export default function EditOrderPage() {
         
         onUpdateQuantity={updateQuantity}
         onRemove={removeFromCart}
-        
         onUpdatePrice={handleUpdatePrice}
         
-        // 🔥 YANGI PROPLAR
         discountAmount={discountAmount}
         discountValue={discountValue}
         discountType={discountType}
         onDiscountApply={handleDiscountApply}
 
-        // 🔥 SELLER EDIT QILISH PAYTIDA (Agar siz seller ham tahrirlashini xohlasangiz true qiling)
-        // Hozir siz "Seller qila olmasin" degan edingiz, lekin bu "Edit Page" odatda
-        // o'z buyurtmasini tuzatish uchun. Agar faqat Cashier/Admin ruxsatli bo'lsa,
-        // bu pagega kirish huquqini middleware orqali cheklash kerak.
-        // Agar bu page Seller uchun bo'lsa:
-        canDiscount={false} // ❌ Seller chegirma bera olmaydi, faqat mahsulot qo'sha oladi/ayiradi
-        
+        canDiscount={true} // Seller ham discountni ko'rishi kerak
         getStockError={getStockError}
         onSave={() => updateMutation.mutate()}
         isSaving={updateMutation.isPending}

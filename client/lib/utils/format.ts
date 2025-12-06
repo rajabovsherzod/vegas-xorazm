@@ -27,3 +27,4 @@ export function formatCurrency(amount: number, currency: "UZS" | "USD" = "UZS"):
 
 
 
+
