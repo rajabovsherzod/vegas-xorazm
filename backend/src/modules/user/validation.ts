@@ -14,9 +14,7 @@ export const createUserSchema = z.object({
     password: z.string().min(5, "Parol kamida 5 ta belgidan iborat bo'lishi kerak"),
     
     // Faqat shu 3 ta rolni tanlash mumkin
-    role: z.enum(roles, {
-      errorMap: () => ({ message: "Rol noto'g'ri tanlandi. (admin, cashier yoki seller bo'lishi kerak)" })
-    }),
+    role: z.enum(["admin", "cashier", "seller"]),
 
     fixSalary: z.coerce.string().regex(/^\d+(\.\d{1,2})?$/, "Oylik noto'g'ri").default("0"),
     bonusPercent: z.coerce.string().regex(/^\d+(\.\d{1,2})?$/, "Bonus noto'g'ri").default("0"),

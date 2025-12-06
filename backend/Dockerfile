@@ -1,50 +1,44 @@
-# Backend Dockerfile
-FROM node:20-alpine AS base
-
-# Install pnpm
-RUN npm install -g pnpm
-
-# Set working directory
+# --- Build Stage ---
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
+# Pnpm ni o'rnatish
+RUN npm install -g pnpm
 
-# Install dependencies
-FROM base AS dependencies
-RUN pnpm install --frozen-lockfile
+# .npmrc faylini ham nusxalash kerak (yangi qo'shgan faylimiz)
+COPY package.json pnpm-lock.yaml .npmrc ./
 
-# Build stage
-FROM base AS build
-COPY --from=dependencies /app/node_modules ./node_modules
+# Dependencies o'rnatish (endi hoisted rejimda o'rnatiladi)
+RUN pnpm install --no-frozen-lockfile
+
+# Kodni nusxalash
 COPY . .
+
+# Build qilish
 RUN pnpm run build
 
-# Production stage
+# --- Production Stage ---
 FROM node:20-alpine AS production
-
-# Install pnpm
-RUN npm install -g pnpm
-
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
+RUN npm install -g pnpm
 
-# Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile
+ENV NODE_ENV=production
 
-# Copy built files
+# Kerakli fayllarni nusxalash
+COPY package.json pnpm-lock.yaml .npmrc ./
+
+# Faqat production kutubxonalarini o'rnatish
+RUN pnpm install --prod --no-frozen-lockfile
+
+# Builddan chiqqan fayllarni olish
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/drizzle ./drizzle
+# Agar kerak bo'lsa, drizzle papkasini ham oching:
+# COPY --from=build /app/drizzle ./drizzle
 
-# Expose port
 EXPOSE 5000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
   CMD node -e "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Start application
 CMD ["node", "dist/server.js"]
-

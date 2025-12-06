@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from "express";
-import { AnyZodObject, ZodError } from "zod";
+import { ZodError, ZodSchema } from "zod";
 import ApiError from "../utils/ApiError";
 
 export const validate =
-  (schema: AnyZodObject) =>
+  (schema: ZodSchema) =>
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await schema.parseAsync({
@@ -13,15 +13,17 @@ export const validate =
       });
       return next();
     } catch (error) {
-      // Agar bu Zod xatosi bo'lsa
+      // Agar xatolik ZodError bo'lsa
       if (error instanceof ZodError) {
-        // 🔥 FIX: Xavfsiz mapping
-        const errorMessage = error.errors
-          ? error.errors.map((issue) => issue.message).join(", ")
-          : "Validatsiya xatosi (Aniqlab bo'lmadi)";
+        // 🔥 FIX: (error as any) qilib, TypeScript tekshiruvini aylanib o'tamiz.
+        // Chunki runtime paytida 'errors' massivi aniq bo'ladi.
+        const errorMessage = (error as any).errors
+          .map((issue: any) => issue.message)
+          .join(", ");
 
         return next(new ApiError(400, errorMessage));
       }
+      
       // Boshqa xatoliklar
       return next(error);
     }

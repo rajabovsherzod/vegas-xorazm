@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # --- Database Service ---
   postgres:
     image: postgres:15-alpine
     container_name: vegas_db
@@ -13,6 +14,35 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
+    networks:
+      - vegas_network
 
+  # --- Backend Service ---
+  backend:
+    build:
+      context: ./backend  # Backend kodi turgan papka nomi
+      dockerfile: Dockerfile
+    container_name: vegas_backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      # E'tibor bering: host nomi 'localhost' emas, 'postgres' bo'lishi kerak (servis nomi bilan bir xil)
+      - DATABASE_URL=postgresql://myuser:mypassword@postgres:5432/vegas_crm
+      - JWT_SECRET=vegas_crm_super_secret_key_2025
+      - JWT_EXPIRES_IN=1d
+      - NODE_ENV=production
+    depends_on:
+      - postgres
+    restart: always
+    networks:
+      - vegas_network
+
+# Tarmoqlar (Backend va Databaseni bir-birini ko'rishi uchun)
+networks:
+  vegas_network:
+    driver: bridge
+
+# Volumelar (Ma'lumotlar o'chib ketmasligi uchun)
 volumes:
   postgres_data:

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import ApiError from "../utils/ApiError";
 import logger from "../utils/logger";
-import { logsService } from "../modules/logs/service";
+import { logsService } from "../modules/logs/service"; // Endi bu fayl bor!
 
 const errorHandler = (
   err: any,
@@ -20,17 +20,16 @@ const errorHandler = (
   const statusCode = error.statusCode || 500;
   const message = error.message || "Something went wrong";
 
-  // Winston logger ga yozish (backup)
+  // Winston logger (asosiy log)
   logger.error(`${statusCode} - ${message} - ${req.originalUrl} - ${req.method} - ${req.ip}`, {
     stack: error.stack,
     errors: error.errors,
   });
 
-  // Bazaga saqlash (try-catch bilan - agar bazaga saqlashda xatolik bo'lsa, infinite loop bo'lmasin)
-  // Async ishlatish uchun Promise qilamiz (Express 4 async middleware qo'llab-quvvatlamaydi)
   const userId = (req as any).user?.id || null;
 
-  // context ni object sifatida yuboramiz, service ichida JSON.stringify qilinadi
+  // Logs service ga yozish
+  // try-catch ishlatamiz, chunki logsService.create promise qaytaradi
   logsService.create({
     message: `[Backend] ${statusCode} - ${message}`,
     stack: error.stack || null,
@@ -44,20 +43,18 @@ const errorHandler = (
       body: req.body,
       query: req.query,
       params: req.params,
-    }) as any, // Type assertion - service ichida qayta JSON.stringify qilinmaydi
+    }) as any,
     ip: req.ip || null,
     userId,
-  }).catch((dbError) => {
-    // Agar bazaga saqlashda xatolik bo'lsa, faqat Winston ga yozamiz
-    logger.error('Failed to save error to database:', dbError);
+  }).catch((dbError: any) => { // Type 'any' deb belgilandi
+    // Bazaga yozish o'xshamasa, server to'xtab qolmasligi kerak
+    console.error('Failed to save log via service:', dbError);
   });
 
-  // Clientga javob qaytaramiz
   res.status(statusCode).json({
     success: false,
     message,
     errors: error.errors,
-    // Productionda stack trace ko'rinmasin
     stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
   });
 };
