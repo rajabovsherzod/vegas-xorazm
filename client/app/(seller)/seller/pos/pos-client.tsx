@@ -202,7 +202,7 @@ export default function POSPageClient() {
         getStockError={getStockError}
         onSave={() => createOrderMutation.mutate()}
         isSaving={createOrderMutation.isPending}
-
+        originalTotalAmount={totalAmount}
         // 🔥 SELLER UCHUN PROPLAR (Bo'sh va False)
         canDiscount={false}
         discountAmount={0}

@@ -6,9 +6,7 @@ export const createUserSchema = z.object({
   password: z.string().min(6, "Parol kamida 6 ta belgi bo'lishi kerak"),
   
   // 🔥 TUZATILDI: required_error o'rniga errorMap ishlatamiz
-  role: z.enum(["admin", "seller"], {
-    errorMap: () => ({ message: "Rolni tanlang" }), 
-  }),
+  role: z.enum(["admin", "seller"], { message: "Rolni tanlang"}),
 
   cardId: z.string().optional(),
   

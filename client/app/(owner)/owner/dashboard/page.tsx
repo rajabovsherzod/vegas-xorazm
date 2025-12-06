@@ -109,7 +109,6 @@ export default function OwnerDashboard() {
           format="currency"
           icon={<ShoppingCart className="h-6 w-6" />}
           description={`${stats?.todaySales?.count || 0} ta buyurtma`}
-          colorScheme="cyan"
         />
         <KPICard
           title="Haftalik Savdo"
@@ -117,7 +116,6 @@ export default function OwnerDashboard() {
           format="currency"
           icon={<Calendar className="h-6 w-6" />}
           description={`${stats?.weeklySales?.count || 0} ta buyurtma`}
-          colorScheme="blue"
         />
         <KPICard
           title="Oylik Savdo"
@@ -125,7 +123,6 @@ export default function OwnerDashboard() {
           format="currency"
           icon={<TrendingUp className="h-6 w-6" />}
           description={`${stats?.monthlySales?.count || 0} ta buyurtma`}
-          colorScheme="violet"
         />
         <KPICard
           title="Ombor Qiymati"
@@ -133,7 +130,6 @@ export default function OwnerDashboard() {
           format="currency"
           icon={<Wallet className="h-6 w-6" />}
           description="Jami mahsulotlar qiymati"
-          colorScheme="emerald"
         />
         <KPICard
           title="Jami Buyurtmalar"
@@ -141,7 +137,6 @@ export default function OwnerDashboard() {
           format="number"
           icon={<Package className="h-6 w-6" />}
           description="Yakunlangan buyurtmalar"
-          colorScheme="amber"
         />
         <KPICard
           title="Xodimlar"
@@ -149,7 +144,6 @@ export default function OwnerDashboard() {
           format="number"
           icon={<Users className="h-6 w-6" />}
           description="Faol xodimlar soni"
-          colorScheme="rose"
         />
       </div>
 

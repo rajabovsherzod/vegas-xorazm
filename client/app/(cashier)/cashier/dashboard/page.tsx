@@ -94,7 +94,6 @@ export default function AdminDashboard() {
           format="currency"
           icon={<ShoppingCart className="h-6 w-6" />}
           description={`${stats?.todaySales?.count || 0} ta chek`}
-          colorScheme="cyan"
         />
         <KPICard
           title="Kutilayotgan"
@@ -102,7 +101,6 @@ export default function AdminDashboard() {
           format="number"
           icon={<Clock className="h-6 w-6" />}
           description="Tasdiqlash kerak"
-          colorScheme="amber"
         />
         <KPICard
           title="Yakunlangan"
@@ -110,7 +108,6 @@ export default function AdminDashboard() {
           format="number"
           icon={<CheckCircle className="h-6 w-6" />}
           description="Jami buyurtmalar"
-          colorScheme="emerald"
         />
         <KPICard
           title="Kam Qolgan"
@@ -118,7 +115,6 @@ export default function AdminDashboard() {
           format="number"
           icon={<AlertTriangle className="h-6 w-6" />}
           description="Omborni tekshiring"
-          colorScheme="rose"
         />
       </div>
 

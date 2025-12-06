@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+// Resolver ni import qilamiz
+import { useForm, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, Download, Package, Cuboid, Search } from "lucide-react";
@@ -26,7 +27,11 @@ const importStockSchema = z.object({
   quantity: z.coerce.number().min(1, "Miqdor 0 dan katta bo'lishi kerak"),
 });
 
-type ImportStockFormValues = z.infer<typeof importStockSchema>;
+// Formaning tipi
+interface ImportStockFormValues {
+  productId: string;
+  quantity: number;
+}
 
 interface ImportStockDialogProps {
   products: any[];
@@ -36,8 +41,10 @@ export function ImportStockDialog({ products = [] }: ImportStockDialogProps) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  // O'ZGARISH SHU YERDA:
   const form = useForm<ImportStockFormValues>({
-    resolver: zodResolver(importStockSchema),
+    // Resolverga ImportStockDialogProps EMAS, ImportStockFormValues beramiz
+    resolver: zodResolver(importStockSchema) as Resolver<ImportStockFormValues>,
     defaultValues: {
       productId: "",
       quantity: 0,
@@ -46,7 +53,7 @@ export function ImportStockDialog({ products = [] }: ImportStockDialogProps) {
 
   const mutation = useMutation({
     mutationFn: (data: ImportStockFormValues) => 
-      productService.importStock(Number(data.productId), data.quantity),
+      productService.addStock(Number(data.productId), data.quantity),
     onSuccess: () => {
       toast.success("Mahsulot kirim qilindi");
       queryClient.invalidateQueries({ queryKey: ["products"] });
@@ -146,15 +153,15 @@ export function ImportStockDialog({ products = [] }: ImportStockDialogProps) {
                   <FormItem>
                     <FormLabel className="text-sm font-medium text-gray-700 dark:text-gray-200">Qo'shiladigan miqdor</FormLabel>
                     <FormControl>
-                        <div className="relative">
-                            <Cuboid className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <Input 
-                                type="number" 
-                                placeholder="0" 
-                                {...field} 
-                                className="pl-10 h-11 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all rounded-xl font-medium" 
-                            />
-                        </div>
+                      <div className="relative">
+                          <Cuboid className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <Input 
+                              type="number" 
+                              placeholder="0" 
+                              {...field} 
+                              className="pl-10 h-11 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all rounded-xl font-medium" 
+                          />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -181,4 +188,3 @@ export function ImportStockDialog({ products = [] }: ImportStockDialogProps) {
     </Dialog>
   );
 }
-

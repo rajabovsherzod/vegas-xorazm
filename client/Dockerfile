@@ -1,38 +1,63 @@
-# --- Base image ---
+# --- Base Stage ---
 FROM node:20-alpine AS base
 WORKDIR /app
+# Pnpm ni global o'rnatish
 RUN npm install -g pnpm
 
-# --- Dependencies ---
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# --- Dependencies Stage ---
+FROM base AS deps
+WORKDIR /app
 
-# --- Build stage ---
-FROM base AS build
+# Fayllarni nusxalash (.npmrc juda muhim!)
+COPY package.json pnpm-lock.yaml .npmrc ./
+
+# Dependencies o'rnatish (hoisted rejimda)
+RUN pnpm install --no-frozen-lockfile
+
+# --- Builder Stage ---
+FROM base AS builder
+WORKDIR /app
+
+# Deps bosqichidan node_modules ni olib o'tamiz
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Environment o'zgaruvchilarni qabul qilish (Build paytida kerak)
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_WS_URL
 ARG NEXTAUTH_SECRET
+
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 ENV NEXTAUTH_SECRET=$NEXTAUTH_SECRET
+
+# Build qilish (Endi Next topiladi)
 RUN pnpm run build
 
-# --- Production ---
-FROM node:20-alpine AS production
+# --- Production Stage ---
+FROM base AS runner
 WORKDIR /app
-RUN npm install -g pnpm
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile
 
-# Copy build output from the correct stage
-COPY --from=build /app/.next ./.next
-COPY --from=build /app/public ./public
-COPY --from=build /app/next.config.ts ./
+ENV NODE_ENV=production
+
+# Next.js uchun kerakli user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Fayllarni nusxalash
+COPY --from=builder /app/public ./public
+
+# Standalone buildni nusxalash (Next.js 12+ xususiyati)
+# Eslatma: next.config.ts da output: 'standalone' bo'lishi kerak
+# Agar sizda yo'q bo'lsa, pastdagi COPY .next qismini ishlating
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
-CMD ["pnpm", "start"]
+CMD ["node", "server.js"]

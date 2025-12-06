@@ -100,10 +100,6 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: OrderDetailsDi
   const PaymentIcon = payment.icon;
 
   const handlePrint = async () => {
-    if (!printService.isAvailable()) {
-      toast.error('QZ Tray o\'rnatilmagan.');
-      return;
-    }
     setIsPrinting(true);
     try {
       await printService.printReceipt(order);
