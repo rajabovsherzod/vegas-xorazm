@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { Suspense } from "react";
 import { User } from "lucide-react";
 import { userService } from "@/lib/services/user.service"; 
