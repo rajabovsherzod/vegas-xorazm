@@ -1,87 +1,53 @@
-
+version: '3.8'
 
 services:
-  # --- PostgreSQL Database ---
+  # 1. Baza (Postgres)
   postgres:
-    image: postgres:16-alpine
-    container_name: vegas-postgres
-    restart: unless-stopped
+    image: postgres:15-alpine
+    container_name: vegas_db
+    restart: always
     environment:
-      # Biz 'postgres' user va 'vegas_crm' bazasidan foydalandik
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: vegas_crm
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Windows konflikti bo'lmasligi uchun 5433
+    # VPS da xavfsizlik uchun portni yopib qo'ygan ma'qul (faqat ichki tarmoq), 
+    # lekin hozircha debug uchun ochiq turaversin.
     ports:
-      - "5433:5432"
+      - "5432:5432"
+    networks:
+      - vegas_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # --- Backend API ---
+  # 2. Backend (Node.js)
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: vegas-backend
-    restart: unless-stopped
+    container_name: vegas_backend
+    restart: always
+    ports:
+      - "5000:5000" # Internetga 5000 portni ochamiz (Frontend shu yerga ulanadi)
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      NODE_ENV: production
-      PORT: 5000
-      # 🔥 MUHIM: Baza nomi 'vegas_crm' bo'lishi SHART
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/vegas_crm
-      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-    ports:
-      - "5000:5000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-
-  # --- Frontend ---
-  frontend:
-    build:
-      context: ./client
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000/api/v1}
-        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-http://localhost:5000}
-    container_name: vegas-frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
-    environment:
-      # Client (Browser) uchun:
-      NEXT_PUBLIC_API_URL: http://localhost:5000/api/v1
-      NEXT_PUBLIC_WS_URL: http://localhost:5000
-      
-      # Server (NextAuth) uchun ichki tarmoq manzili:
-      BACKEND_URL: http://vegas-backend:5000/api/v1
-      
-      # NextAuth sozlamalari
-      NEXTAUTH_URL: http://localhost:3000
-      NEXTAUTH_SECRET: bu_juda_maxfiy_kalit_12345
-    ports:
-      - "3000:3000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
+    networks:
+      - vegas_network
 
 volumes:
   postgres_data:
-    driver: local
 
 networks:
-  default:
-    name: vegas-network
+  vegas_network:
+    driver: bridge
