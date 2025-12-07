@@ -1,15 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Search, Loader2, AlertCircle, RotateCcw, Scissors, Eye, MoreHorizontal, Wallet } from "lucide-react";
+import { Search, Loader2, AlertCircle, MoreHorizontal, Eye, RotateCcw, Scissors } from "lucide-react";
+import { format } from "date-fns";
 
 import { orderService } from "@/lib/services/order.service";
 import { Order } from "@/types/api";
-import { formatCurrency, cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { formatCurrency } from "@/lib/utils";
 
 // UI Components
 import { Input } from "@/components/ui/input";
@@ -17,12 +16,6 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogClose,
-  DialogTitle, // 🔥 XATONI YO'QOTISH UCHUN BU KERAK
-} from "@/components/ui/dialog"; 
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,13 +25,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Dialoglar
 import { OrderDetailsDialog } from "@/components/orders/order-details-dialog";
+import { RefundDialog } from "@/components/orders/refund-dialog"; // 🔥 O'ZIMIZ YASAGAN YANGI DIALOG
 import { getColumns } from "./columns";
 
 // ----------------------------------------------------------------------
 // 1. ADMIN ORDER CARD (MOBIL UCHUN)
 // ----------------------------------------------------------------------
-function AdminOrderCard({ order, onView, onFullRefund, onPartialRefund }: any) {
+function AdminOrderCard({ order, onView, onRefund }: any) {
   const canRefund = order.status === 'completed' || order.status === 'partially_refunded';
 
   return (
@@ -82,11 +77,8 @@ function AdminOrderCard({ order, onView, onFullRefund, onPartialRefund }: any) {
               {canRefund && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => onFullRefund(order)} className="cursor-pointer text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/20 py-2.5">
-                    <RotateCcw className="w-4 h-4 mr-2" /> To'liq qaytarish
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onPartialRefund(order)} className="cursor-pointer text-orange-600 focus:text-orange-700 focus:bg-orange-50 dark:focus:bg-orange-900/20 py-2.5">
-                    <Scissors className="w-4 h-4 mr-2" /> Qisman qaytarish
+                  <DropdownMenuItem onClick={() => onRefund(order)} className="cursor-pointer text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/20 py-2.5">
+                    <RotateCcw className="w-4 h-4 mr-2" /> Qaytarish (Refund)
                   </DropdownMenuItem>
                 </>
               )}
@@ -102,16 +94,14 @@ function AdminOrderCard({ order, onView, onFullRefund, onPartialRefund }: any) {
 // 2. MAIN PAGE
 // ----------------------------------------------------------------------
 export default function AdminOrdersPage() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  
   const [searchId, setSearchId] = useState("");
   const [orderIdToFetch, setOrderIdToFetch] = useState<number | null>(null);
   
   // Dialog States
-  const [fullRefundOrder, setFullRefundOrder] = useState<Order | null>(null);
+  const [refundOrder, setRefundOrder] = useState<Order | null>(null); // 🔥 BITTA STATE YETARLI
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isRefundOpen, setIsRefundOpen] = useState(false);
 
   // 1. QUERY
   const { data: order, isLoading, isError } = useQuery({
@@ -121,41 +111,27 @@ export default function AdminOrdersPage() {
     retry: false,
   });
 
-  // 2. MUTATION
-  const fullRefundMutation = useMutation({
-    mutationFn: (orderId: number) => orderService.refund(orderId, {
-       items: fullRefundOrder?.items?.map((i: any) => ({
-          productId: i.productId,
-          quantity: Number(i.quantity)
-       })) || [],
-       reason: "Admin tomonidan to'liq qaytarildi"
-    }),
-    onSuccess: () => {
-      toast.success("Buyurtma to'liq qaytarildi");
-      setFullRefundOrder(null);
-      queryClient.invalidateQueries({ queryKey: ["admin-order", orderIdToFetch] });
-    },
-    onError: (err: any) => toast.error(err.message || "Xatolik yuz berdi"),
-  });
-
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchId) return;
     setOrderIdToFetch(Number(searchId));
   };
 
-  const handleFullRefund = (order: Order) => setFullRefundOrder(order);
-  const handlePartialRefund = (order: Order) => router.push(`/admin/orders/${order.id}/refund`);
+  // 🔥 YAGONA REFUND HANDLER
+  const handleRefund = (order: Order) => {
+    setRefundOrder(order);
+    setIsRefundOpen(true);
+  };
   
   const handleView = (order: Order) => {
     setViewOrder(order);
     setIsDetailsOpen(true);
   };
 
+  // Columns ga endi bitta onRefund funksiyasini beramiz
   const columns = getColumns({
     onView: handleView,
-    onFullRefund: handleFullRefund,
-    onPartialRefund: handlePartialRefund,
+    onRefund: handleRefund, 
   });
 
   return (
@@ -200,8 +176,7 @@ export default function AdminOrdersPage() {
                  <AdminOrderCard 
                     order={order} 
                     onView={handleView}
-                    onFullRefund={handleFullRefund} 
-                    onPartialRefund={handlePartialRefund} 
+                    onRefund={handleRefund} 
                  />
               </div>
            </>
@@ -220,60 +195,12 @@ export default function AdminOrdersPage() {
         onOpenChange={setIsDetailsOpen} 
       />
 
-      {/* 🔥 MUKAMMAL FULL REFUND DIALOG (FIXED) */}
-      <Dialog open={!!fullRefundOrder} onOpenChange={(open) => !open && setFullRefundOrder(null)}>
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white dark:bg-[#1C2C30] border-none shadow-2xl rounded-3xl">
-          
-          <div className="p-6 flex flex-col items-center text-center">
-            {/* ICON */}
-            <div className="w-16 h-16 rounded-full bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center mb-5 ring-4 ring-rose-50/50 dark:ring-rose-900/10">
-               <RotateCcw className="w-8 h-8 text-rose-600 dark:text-rose-500" />
-            </div>
-            
-            {/* 🔥 TITLE FIX: h2 emas, DialogTitle */}
-            <DialogTitle className="text-xl font-bold text-[#212B36] dark:text-white">
-                To'liq qaytarish
-            </DialogTitle>
-            
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-[280px] leading-relaxed">
-              Buyurtma <span className="font-bold text-[#212B36] dark:text-white">#{fullRefundOrder?.id}</span> dagi barcha mahsulotlar omborga qaytariladi.
-            </p>
-
-            {/* MONEY BOX */}
-            <div className="w-full mt-6 bg-gray-50 dark:bg-black/20 p-4 rounded-2xl border border-gray-100 dark:border-white/5">
-               <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Wallet className="w-3 h-3" />
-                    Mijozga qaytariladigan summa
-                  </span>
-               </div>
-               <div className="flex items-center justify-center pt-1">
-                  <span className="text-2xl font-extrabold text-[#00B8D9] tracking-tight">
-                    {fullRefundOrder && formatCurrency(Number(fullRefundOrder.finalAmount), "UZS")}
-                  </span>
-               </div>
-            </div>
-          </div>
-          
-          {/* FOOTER (GRID) */}
-          <div className="p-6 pt-0 grid grid-cols-2 gap-3 w-full">
-            <DialogClose asChild>
-                <Button variant="outline" className="h-12 rounded-xl border-gray-200 dark:border-white/10 font-bold hover:bg-gray-50 dark:hover:bg-white/5 transition-all">
-                    Bekor qilish
-                </Button>
-            </DialogClose>
-            
-            <Button 
-              onClick={() => fullRefundOrder && fullRefundMutation.mutate(fullRefundOrder.id)}
-              className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-lg shadow-rose-600/20 transition-all active:scale-95"
-              disabled={fullRefundMutation.isPending}
-            >
-              {fullRefundMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Tasdiqlash"}
-            </Button>
-          </div>
-
-        </DialogContent>
-      </Dialog>
+      {/* 🔥 UNIVERSAL REFUND DIALOG */}
+      <RefundDialog 
+        order={refundOrder}
+        open={isRefundOpen}
+        onOpenChange={setIsRefundOpen}
+      />
 
     </div>
   );

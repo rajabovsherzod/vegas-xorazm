@@ -1,10 +1,19 @@
 import { db } from "@/db";
-import { orders, orderItems, products, NewOrder } from "@/db/schema";
+import { orders, orderItems, products, NewOrder, refunds, refundItems } from "@/db/schema";
 import { eq, inArray, sql, desc } from "drizzle-orm";
 import ApiError from "@/utils/ApiError";
 import logger from "@/utils/logger";
 import { getIO } from "@/socket";
 import { CreateOrderInput, UpdateOrderStatusInput, UpdateOrderInput } from "./validation";
+
+interface RefundItemsPayload {
+  items: { 
+    productId: number; 
+    quantity: number 
+  }[];
+  reason?: string;
+  refundedById: number; // Kim qaytardi (Admin)
+}
 
 export const orderService = {
   
@@ -410,7 +419,119 @@ export const orderService = {
       .set({ isPrinted: true })
       .where(eq(orders.id, id))
       .returning();
+  
     if (!updatedOrder) throw new ApiError(404, "Buyurtma topilmadi");
+  
+    const io = getIO();
+    io.to("admin_room").emit("order_printed", updatedOrder);
+  
     return updatedOrder;
-  }
+  },
+
+
+  refund: async (orderId: number, payload: RefundItemsPayload): Promise<any> => {
+    return await db.transaction(async (tx) => {
+      // 1. Order va uning itemlarini olamiz
+      const order = await tx.query.orders.findFirst({
+        where: eq(orders.id, orderId),
+        with: { items: true }
+      });
+
+      if (!order) throw new ApiError(404, "Buyurtma topilmadi");
+      if (order.status === 'fully_refunded' || order.status === 'cancelled') {
+        throw new ApiError(400, "Bu buyurtma allaqachon yopilgan");
+      }
+
+      let totalRefundAmount = 0;
+
+      // 2. Har bir qaytarilayotgan mahsulot bo'yicha aylanamiz
+      for (const item of payload.items) {
+        const originalItem = order.items.find(i => i.productId === item.productId);
+        
+        if (!originalItem) continue; // Agar bunday mahsulot orderda bo'lmasa, o'tkazib yuboramiz
+
+        const refundQty = Number(item.quantity);
+        const currentQty = Number(originalItem.quantity);
+
+        if (refundQty > currentQty) {
+           throw new ApiError(400, `Mahsulot sonidan ko'p qaytara olmaysiz! (Mavjud: ${currentQty}, So'raldi: ${refundQty})`);
+        }
+
+        // A) Stockni (Omborni) ko'paytiramiz
+        await tx
+          .update(products)
+          .set({ 
+            stock: sql`${products.stock} + ${refundQty}`,
+            updatedAt: new Date()
+          })
+          .where(eq(products.id, item.productId));
+
+        // B) Qaytariladigan summani hisoblaymiz
+        // (Jami narx / Jami son) = 1 dona mahsulotning real sotilgan narxi
+        const unitPrice = Number(originalItem.totalPrice) / currentQty;
+        const refundPrice = unitPrice * refundQty;
+        
+        totalRefundAmount += refundPrice;
+
+        // C) 🔥 MUHIM: ORDER ITEMNI YANGILASH (SONINI KAMAYTIRISH)
+        const newQty = currentQty - refundQty;
+        const newTotalPrice = unitPrice * newQty;
+
+        if (newQty <= 0) {
+          // Agar hammasi qaytarilsa -> qatorni o'chiramiz
+          await tx.delete(orderItems).where(eq(orderItems.id, originalItem.id));
+        } else {
+          // Qisman qaytarilsa -> sonini va summasini yangilaymiz
+          await tx.update(orderItems)
+            .set({
+              quantity: newQty.toString(),       // Yangi son
+              totalPrice: newTotalPrice.toString() // Yangi summa
+            })
+            .where(eq(orderItems.id, originalItem.id));
+        }
+      }
+
+      // 3. Refunds tarixiga yozish
+      if (totalRefundAmount > 0) {
+        await tx.insert(refunds).values({
+          orderId: orderId,
+          totalAmount: totalRefundAmount.toString(),
+          reason: payload.reason || "Qaytarish",
+          refundedBy: payload.refundedById,
+        });
+      }
+
+      // 4. Asosiy Order summasini va statusini yangilash
+      // Hozir bazada qolgan itemlarni qayta tekshiramiz
+      const remainingItems = await tx.query.orderItems.findMany({
+        where: eq(orderItems.orderId, orderId)
+      });
+
+      let newStatus: any = order.status;
+      let newFinalAmount = 0;
+
+      if (remainingItems.length === 0) {
+        // Hamma narsa qaytib ketdi -> Bekor qilindi/To'liq qaytdi
+        newStatus = 'fully_refunded';
+        newFinalAmount = 0;
+      } else {
+        // Hali narsalar bor -> Qisman qaytdi
+        newStatus = 'partially_refunded';
+        // Qolgan itemlar summasini yig'amiz
+        newFinalAmount = remainingItems.reduce((acc, i) => acc + Number(i.totalPrice), 0);
+      }
+
+      // Orderni yangilaymiz
+      await tx.update(orders)
+        .set({ 
+            status: newStatus as any, 
+            finalAmount: newFinalAmount.toString(),
+            updatedAt: new Date() 
+        })
+        .where(eq(orders.id, orderId));
+
+      return { success: true, message: "Muvaffaqiyatli qaytarildi" };
+    });
+  },
+  
 };

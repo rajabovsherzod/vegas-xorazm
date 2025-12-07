@@ -83,3 +83,21 @@ export const markAsPrinted = asyncHandler(async (req: Request, res: Response) =>
   
   res.status(200).json(new ApiResponse(200, result, "Chek chiqarildi deb belgilandi"));
 });
+
+/**
+ * 7. REFUND ORDER (🔥 YANGI)
+ * Buyurtmani qisman yoki to'liq qaytarish
+ */
+export const refundOrder = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const orderId = Number(req.params.id);
+  const userId = req.user.id; // Qaytarayotgan admin IDsi
+  const { items, reason } = req.body;
+
+  const result = await orderService.refund(orderId, {
+    items,
+    reason,
+    refundedById: userId
+  });
+
+  res.status(200).json(new ApiResponse(200, result, "Buyurtma muvaffaqiyatli qaytarildi"));
+});

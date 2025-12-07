@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   MoreHorizontal,
-  RotateCcw, // To'liq qaytarish
-  Scissors,  // Qisman qaytarish
+  RotateCcw,
   Eye,
   User,
   CreditCard,
@@ -35,11 +34,10 @@ const paymentMethodMap: Record<string, { label: string; icon: any }> = {
 
 interface ColumnsProps {
   onView: (order: Order) => void;
-  onFullRefund: (order: Order) => void;    // To'liq qaytarish
-  onPartialRefund: (order: Order) => void; // Qisman qaytarish
+  onRefund: (order: Order) => void; // 🔥 BITTA FUNKSIYA YETARLI
 }
 
-export const getColumns = ({ onView, onFullRefund, onPartialRefund }: ColumnsProps): ColumnDef<Order>[] => [
+export const getColumns = ({ onView, onRefund }: ColumnsProps): ColumnDef<Order>[] => [
   {
     accessorKey: "id",
     header: "ID",
@@ -132,7 +130,6 @@ export const getColumns = ({ onView, onFullRefund, onPartialRefund }: ColumnsPro
     cell: ({ row }) => {
       const order = row.original;
       
-      // Faqat "Completed" yoki "Partially Refunded" bo'lsa qaytarish mumkin
       const canRefund = order.status === 'completed' || order.status === 'partially_refunded';
 
       return (
@@ -143,7 +140,6 @@ export const getColumns = ({ onView, onFullRefund, onPartialRefund }: ColumnsPro
             </Button>
           </DropdownMenuTrigger>
           
-          {/* 🔥 DIZAYN YANGILANDI: Cashier/Seller dagi kabi */}
           <DropdownMenuContent 
             align="end" 
             className="w-[200px] bg-white dark:bg-[#1C2C30] border border-gray-200 dark:border-white/10 shadow-xl z-[9999]"
@@ -163,22 +159,13 @@ export const getColumns = ({ onView, onFullRefund, onPartialRefund }: ColumnsPro
               <>
                 <DropdownMenuSeparator />
                 
-                {/* To'liq Qaytarish (Qizil rangda) */}
+                {/* QAYTARISH (REFUND) */}
                 <DropdownMenuItem 
-                  onClick={() => onFullRefund(order)} 
+                  onClick={() => onRefund(order)} 
                   className="cursor-pointer text-rose-600 dark:text-rose-500 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/20 py-2.5"
                 >
                   <RotateCcw className="w-4 h-4 mr-2" />
-                  To'liq qaytarish
-                </DropdownMenuItem>
-                
-                {/* Qisman Qaytarish (Orange rangda) */}
-                <DropdownMenuItem 
-                  onClick={() => onPartialRefund(order)} 
-                  className="cursor-pointer text-orange-600 dark:text-orange-500 focus:text-orange-700 focus:bg-orange-50 dark:focus:bg-orange-900/20 py-2.5"
-                >
-                  <Scissors className="w-4 h-4 mr-2" />
-                  Qisman qaytarish
+                  Qaytarish (Refund)
                 </DropdownMenuItem>
               </>
             )}

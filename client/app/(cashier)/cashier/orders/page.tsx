@@ -69,10 +69,17 @@ export default function AdminOrdersPage() {
 
     socket.on("order_status_change", handleRefetch);
 
+    socket.on("order_printed", (data) => {
+      toast.success(`Buyurtma #${data.id} chop etildi`);
+      handleRefetch();
+    });
+    
+
     return () => {
       socket.off("new_order");
       socket.off("order_updated");
       socket.off("order_status_change");
+      socket.off("order_printed");
     };
   }, [socket, queryClient]);
 

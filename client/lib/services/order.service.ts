@@ -64,7 +64,6 @@ export const orderService = {
   },
 
   refund: async (orderId: number, payload: RefundPayload): Promise<any> => {
-    const data = await api.post<any>(`/orders/${orderId}/refund`, payload);
-    return data;
+    return await api.post<any>(`/orders/${orderId}/refund`, payload);
   },
 };
