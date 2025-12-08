@@ -1,17 +1,8 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-
-// Token uchun zarur bo'lgan custom tiplar
-interface CustomAuthUser {
-  id: string;
-  name: string;
-  username: string;
-  role: string;
-  accessToken: string;
-}
+import axios from "axios";
 
 export const authOptions: NextAuthOptions = {
-  // 1. PROVIDERS (Backendga so'rov yuborish)
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -19,98 +10,75 @@ export const authOptions: NextAuthOptions = {
         username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" },
       },
+      
       async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) return null;
-
-        // 🔥 MUHIM FIX: Server-side (Docker ichida) bo'lsak, ichki tarmoqdan foydalanamiz
-        // Aks holda (masalan local dev da) public URL dan foydalanamiz.
-        const baseUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
-
         try {
-          console.log(`NextAuth Login Attempt to: ${baseUrl}/auth/login`);
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL; 
+          
+          // Agar baseUrl bo'lmasa, xato qaytarish
+          if (!baseUrl) throw new Error("API URL topilmadi");
 
-          const res = await fetch(`${baseUrl}/auth/login`, {
-            method: "POST",
-            body: JSON.stringify({
-              username: credentials.username,
-              password: credentials.password,
-            }),
-            headers: { "Content-Type": "application/json" },
-            cache: "no-store",
+          const { data } = await axios.post(`${baseUrl}/auth/login`, {
+            username: credentials?.username,
+            password: credentials?.password,
           });
 
-          const response = await res.json();
-
-          console.log("NextAuth Backend Response:", response);
-
-          if (res.ok && response.success) {
-            const { user, accessToken } = response.data;
-
-            // User obyektini NextAuth tushunadigan formatga o'tkazamiz
+          // Agar login muvaffaqiyatli bo'lsa
+          if (data && data.success && data.token) {
+            // 🔥 BU YERDA TYPESCRIPT XATOSINI YO'QOTAMIZ
+            // Biz yuqorida User tipini kengaytirganimiz uchun endi bemalol
+            // role, username, accessToken larni qaytarishimiz mumkin.
             return {
-              id: user.id.toString(),
-              name: user.fullName || user.username,
-              username: user.username,
-              role: user.role,
-              accessToken: accessToken,
-            } as CustomAuthUser;
+              id: String(data.data.user.id), // ID string bo'lishi kerak
+              name: data.data.user.fullName,
+              username: data.data.user.username,
+              role: data.data.user.role,
+              accessToken: data.token,
+              // email va image shart emas, agar User tipida optional (?) qilingan bo'lsa
+            };
           }
-          
-          // Agar backend xato qaytarsa
-          console.error("Login failed:", response.message);
-          return null;
 
-        } catch (error) {
-          console.error("Login fetch error:", error);
+          return null;
+        } catch (error: any) {
+          console.error("Login Error:", error.response?.data?.message || error.message);
           return null;
         }
       },
     }),
   ],
 
-  // 2. CALLBACKS (Ma'lumotlarni saqlash va uzatish)
   callbacks: {
-    // JWT: User login qilganda ma'lumotlarni tokenga yozamiz
     async jwt({ token, user }) {
       if (user) {
-        const customUser = user as CustomAuthUser;
-        return {
-          ...token,
-          id: customUser.id,
-          username: customUser.username,
-          role: customUser.role,
-          accessToken: customUser.accessToken,
-        };
+        // Login paytida kelgan ma'lumotlarni JWT ga saqlaymiz
+        token.id = user.id;
+        token.username = user.username;
+        token.role = user.role;
+        token.accessToken = user.accessToken;
       }
       return token;
     },
-
-    // SESSION: Token ichidagi ma'lumotlarni client sessionga o'tkazamiz
     async session({ session, token }) {
-      if (token) {
-        session.user = {
-          ...session.user,
-          id: token.id as string,
-          username: token.username as string,
-          role: token.role as string,
-          accessToken: token.accessToken as string,
-        };
+      if (token && session.user) {
+        // JWT dagi ma'lumotlarni Sessionga chiqaramiz (Frontend uchun)
+        session.user.id = token.id;
+        session.user.username = token.username;
+        session.user.role = token.role;
+        session.user.accessToken = token.accessToken;
       }
       return session;
     },
   },
 
-  // 3. PAGES
   pages: {
     signIn: "/auth/login",
-    error: "/auth/login", // Xatolik bo'lsa ham loginga qaytsin
+    error: "/auth/login",
   },
 
   session: {
     strategy: "jwt",
-    maxAge: 7 * 24 * 60 * 60, // 7 kun
+    maxAge: 24 * 60 * 60, // 1 kun
   },
   
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === "development", // Dev rejimda to'liq loglarni ko'rsatish
 };
